@@ -18,6 +18,7 @@ class DataPoolViewerWidget(QWidget):
         # Création du modèle pour le TreeView
         self.model = QStandardItemModel()
         self.model.setHorizontalHeaderLabels(['Source -> Data -> Subscribers'])
+        self.tree_view.setHeaderHidden(True)
 
         # Appel à la méthode pour remplir le TreeView avec les registres
         self.populate_tree_view(data_registry, source_to_data, subscriber_to_data)
@@ -44,8 +45,9 @@ class DataPoolViewerWidget(QWidget):
             for _, data_row in data_rows.iterrows():
                 data_name = data_row['data_name']
                 data_id = data_row['data_id']
+                data_type = data_row['data_type']
                 storage_type = data_row['storage_type']
-                data_item = QStandardItem(f"Data Name: {data_name} (ID: {data_id}, Storage: {storage_type})")
+                data_item = QStandardItem(f"Data Name: {data_name} (ID: {data_id},Type: {data_type}, Storage: {storage_type})")
 
                 # Ajouter les abonnés pour cette donnée
                 subscriber_rows = subscriber_to_data[subscriber_to_data['data_id'] == data_id]
