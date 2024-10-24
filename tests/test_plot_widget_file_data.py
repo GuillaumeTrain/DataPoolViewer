@@ -12,7 +12,7 @@ class MainWindow(QMainWindow):
 
         # Paramètres pour le signal carré
         sampling_interval = 0.000001  # Intervalle d'échantillonnage de "sampling_interval" secondes
-        duration = 60  # Durée de "duration" secondes
+        duration = 60*5  # Durée de "duration" secondes
         frequency = 1  # Fréquence de "frequency" Hz
         duty_cycle = 0.999  # Duty cycle de "duty_cycle" %
 
