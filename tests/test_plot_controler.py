@@ -32,7 +32,6 @@ class MainWindow(QMainWindow):
         freq_step = 0.5  # Intervalle de fréquence (Hz)
         freq_values = np.linspace(0, 100, 200)  # Fréquences
         amplitude_spectrum = np.abs(np.fft.fft(square_signal))
-
         # Enregistrement de ce signal fréquentiel dans le DataPool
         freq_data_id = self.datapool.register_data(
             Data_Type.FREQ_SIGNAL, "fft_square_signal", "source2", False, False,
