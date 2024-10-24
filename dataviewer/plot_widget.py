@@ -202,5 +202,6 @@ class SignalPlotWidget(QWidget):
         elif self.data_type == Data_Type.FREQ_SIGNAL:
             self.plot_widget.setLabel('bottom', 'Frequency', units='Hz')  # Axe des abscisses : fréquence (Hz)
 
-        # Axe des ordonnées avec l
+        # Set the Y-axis label with the unit of the signal
+        self.plot_widget.setLabel('left', f'Amplitude ({self.unit})')  # Y-axis: Amplitude with units
 
