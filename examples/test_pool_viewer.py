@@ -1,7 +1,7 @@
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtWidgets import QApplication, QMainWindow, QDockWidget
 from PyDataCore import DataPool, Data_Type
-from dataviewer.widget import DataPoolViewerWidget, DataPoolNotifier
+from dataviewer.datapool_viewer import DataPoolViewerWidget, DataPoolNotifier
 import random
 
 

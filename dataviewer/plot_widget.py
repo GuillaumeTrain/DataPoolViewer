@@ -470,7 +470,12 @@ class SignalPlotWidget(QWidget):
         """
         Vérifie si la nouvelle donnée est compatible avec celles déjà affichées
         en fonction de l'axe des abscisses (temps/fréquence).
+        Si le plot est vide (aucune donnée affichée), il est toujours compatible.
         """
+        # Si le plot est vide, accepter toute donnée compatible
+        if self.data_id is None:
+            return True
+
         new_data_info = self.data_pool.get_data_info(data_id)
         new_data_object = new_data_info['data_object'].iloc[0]
 
