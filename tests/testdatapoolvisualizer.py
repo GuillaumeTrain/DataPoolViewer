@@ -16,9 +16,19 @@ class MainWindow(QMainWindow):
 
         # Ajouter un signal temporel
         t = np.linspace(0, 1, 500)
+        #calculer le time step
+        tstep = t[1] - t[0]
+        t2 = np.linspace(0, 2, 750)
+        #calculer le time step
+        tstep2 = t2[1] - t2[0]
         square_signal = signal.square(2 * np.pi * 5 * t)
-        temporal_data_id = self.datapool.register_data(Data_Type.TEMPORAL_SIGNAL, "Square Signal", "source1", False, False, time_step=0.002, unit="V")
+
+        square_signal2 = signal.square(2 * np.pi * 10 * t2)
+        temporal_data_id = self.datapool.register_data(Data_Type.TEMPORAL_SIGNAL, "Square Signal 5Hz", "source1", False, False, time_step=tstep, unit="V")
         self.datapool.store_data(temporal_data_id, square_signal, "source1")
+        temporal_data_id2 = self.datapool.register_data(Data_Type.TEMPORAL_SIGNAL, "Square Signal 10Hz", "source1", False,
+                                                       False, time_step=tstep2, unit="V")
+        self.datapool.store_data(temporal_data_id2, square_signal2, "source1")
 
         # Ajouter un signal fréquentiel (FFT)
         freq_signal = np.abs(np.fft.fft(square_signal))
