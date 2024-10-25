@@ -30,6 +30,7 @@ class MainWindow(QMainWindow):
                                                         False, False, time_step=tstep2, unit="V")
         self.datapool.store_data(temporal_data_id2, square_signal2, "source1")
 
+
         # Ajouter des données fréquentielles pour la FFT (20 exemples avec des timestamps)
         freq_signals = []
         freq_step = 0.5  # Intervalle de fréquence
@@ -62,6 +63,17 @@ class MainWindow(QMainWindow):
         for data_id in freq_signals:
             freq_data_obj = self.datapool.get_data_info(data_id)['data_object'].iloc[0]
             fft_data_obj.add_fft_signal(freq_data_obj)
+
+        #ajouter un troisième signal temporel
+        t3 = np.linspace(0, 1, 500)
+        #calculer le time step
+        tstep3 = t3[1] - t3[0]
+        square_signal3 = signal.square(2 * np.pi * 15 * t3)
+        temporal_data_id3 = self.datapool.register_data(Data_Type.TEMPORAL_SIGNAL, "Square Signal 15Hz", "source1", False,
+                                                       False, time_step=tstep3, unit="V")
+        self.datapool.store_data(temporal_data_id3, square_signal3, "source1")
+
+
 
         # Créer et ajouter le DatapoolVisualizer
         self.visualizer = DatapoolVisualizer(self.datapool, parent=self)
