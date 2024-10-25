@@ -1,9 +1,8 @@
-
 import numpy as np
-import pyqtgraph as pg
 from PyDataCore import Data_Type
-from PySide6.QtWidgets import QWidget, QVBoxLayout
-from tabulate import tabulate
+from PySide6.QtWidgets import QVBoxLayout, QWidget
+import pyqtgraph as pg
+from scipy.stats import alpha
 
 
 class SignalPlotWidget(QWidget):
@@ -11,9 +10,9 @@ class SignalPlotWidget(QWidget):
         super().__init__(parent)
         self.selected = False
         self.data_pool = data_pool
-        self.data_id = None
-        self.curves = {}  # Dictionnaire pour stocker les courbes par data_id
-        self.max_points = 500  # Limiter à 500 points affichés pour optimiser la performance
+        self.curves = {}  # Stocker les courbes par data_id
+        self.extra_axes = []  # Stocker les (AxisItem, ViewBox)
+        self.max_points = 500  # Limite de points affichés pour les performances
         self.data_type = None
         self.x_min = None
         self.x_max = None
@@ -24,68 +23,143 @@ class SignalPlotWidget(QWidget):
         layout.addWidget(self.plot_widget)
         self.setLayout(layout)
 
-        # Légende pour multiple signaux
+        # Légende pour les courbes multiples
         self.legend = self.plot_widget.addLegend(offset=(10, 10))
         self.plot_widget.setBackground('w')
-        self.plot_widget.setMouseEnabled(x=True, y=False)
+        self.plot_widget.setMouseEnabled(x=True, y=True)
         self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
 
-        # Limitation des axes par les données affichées
+        # Assurer la synchronisation des vues
         self.plot_widget.getViewBox().sigXRangeChanged.connect(self.handle_zoom)
         self.plot_widget.scene().sigMouseClicked.connect(self.on_plot_clicked)
 
+        # Assurer que l'axe Y gauche est visible dès le départ
+        self.plot_widget.plotItem.showAxis('right')
+        self.plot_widget.plotItem.hideAxis('left')
+        self.plot_widget.plotItem.showLabel('right')
+
+        # Synchroniser les redimensionnements pour les ViewBox
+        self.plot_widget.plotItem.vb.sigResized.connect(self.update_viewbox_geometry)
+
     def add_data(self, data_id, color='b'):
-        """ Ajoute une courbe au plot. """
+        """ Ajouter une courbe au graphique et lui assigner un axe Y si nécessaire. """
         if data_id in self.curves:
             print(f"Data {data_id} already displayed.")
             return
 
-        # Récupération des informations sur les données
+        # Récupération des informations de la donnée
         data_info = self.data_pool.get_data_info(data_id)
         data_object = data_info['data_object'].iloc[0]
         is_limit = False
-        # Vérification de compatibilité des types de données
-        if not self.data_type:
-            self.data_type = data_object.data_type
-        if not self.is_compatible(data_id):
-            print(f"Incompatible data type for plot. Expected {self.data_type}, got {data_object.data_type}")
-            return
-        if data_object.data_type == Data_Type.TEMP_LIMITS or data_object.data_type == Data_Type.FREQ_LIMITS:
+
+        # Déterminer si la donnée est une limite
+        if data_object.data_type in (Data_Type.TEMP_LIMITS, Data_Type.FREQ_LIMITS):
             is_limit = True
 
-        # Définition de la couleur par défaut pour les limites
+        # Couleur par défaut pour les limites
         color = 'r' if is_limit else color
 
-        # Initialisation des limites des abscisses
-        if not self.x_min or not self.x_max:
-            self.x_min, self.x_max = data_object.tmin, data_object.tmin + data_object.dt * data_object.num_samples
+        # Initialisation des x_min et x_max pour le graphique
+        if self.x_min is None or self.x_max is None:
+            self.x_min = data_object.tmin
+            self.x_max = data_object.tmin + data_object.dt * data_object.num_samples
 
-        # Ajout de la courbe et ajustement des limites
-        curve = self.plot_widget.plot(pen=pg.mkPen(color))
+        # Si c'est la première courbe, créer un ViewBox séparé pour elle
+        if len(self.curves) == 0:
+            # Créer un ViewBox séparé pour la première courbe
+            viewbox = pg.ViewBox()
+            self.plot_widget.scene().addItem(viewbox)
+            viewbox.setXLink(self.plot_widget.plotItem.vb)  # Lier l'axe X avec le ViewBox principal
+
+            # Ajouter un axe Y à droite pour la première courbe
+            #cacher l'axe Y par défaut
+            self.plot_widget.plotItem.hideAxis('right')
+
+            axis = pg.AxisItem('right')
+            self.plot_widget.plotItem.layout.addItem(axis, 2, 3)  # Placer à droite du graphique
+            axis.linkToView(viewbox)  # Lier l'axe Y au ViewBox
+            axis.setLabel(data_object.data_name, color=color)
+            # axis.setPen(pg.mkPen(color))
+            axis.setGrid(150)
+
+            # Ajouter la courbe au ViewBox séparé
+            curve = pg.PlotCurveItem(pen=pg.mkPen(color))
+            viewbox.addItem(curve)
+
+            # Désactiver l'auto-scaling du ViewBox principal (pour la première courbe)
+            self.plot_widget.getViewBox().enableAutoRange(False, y=False)
+            self.plot_widget.getViewBox().setYRange(-10, 10)  # Fixer des limites manuelles de l'axe Y si nécessaire
+
+            # Stocker la courbe, l'axe et le ViewBox
+            self.extra_axes.append((axis, viewbox))
+        else:
+            # Ajouter un axe Y supplémentaire à droite pour les courbes suivantes
+            viewbox = pg.ViewBox()
+            self.plot_widget.scene().addItem(viewbox)
+            viewbox.setXLink(self.plot_widget.plotItem.vb)  # Lier l'axe X avec le ViewBox principal
+
+            # Créer un nouvel axe Y à droite pour la courbe supplémentaire
+            axis = pg.AxisItem('right')
+            self.plot_widget.plotItem.layout.addItem(axis, 2, 3 + len(self.extra_axes))  # Ajouter l'axe à droite
+            axis.linkToView(viewbox)  # Lier l'axe Y au ViewBox
+            axis.setLabel(data_object.data_name, color=color)
+            # axis.setPen(pg.mkPen(color))
+            # axis.setGrid(255)
+
+            # Ajouter la courbe au nouveau ViewBox
+            curve = pg.PlotCurveItem(pen=pg.mkPen(color))
+            viewbox.addItem(curve)
+
+            # Stocker l'axe et le ViewBox pour les courbes supplémentaires
+            self.extra_axes.append((axis, viewbox))
+
+        # Ajouter la courbe à la liste des courbes tracées
         self.curves[data_id] = curve
         self.legend.addItem(curve, name=data_object.data_name)
 
-        # Ajuste les limites si besoin
-        if self.data_type == Data_Type.TEMPORAL_SIGNAL:
+        # Mettre à jour les limites en fonction de la nouvelle courbe
+        if data_object.data_type == Data_Type.TEMPORAL_SIGNAL:
             self.x_min = min(self.x_min, data_object.tmin)
             self.x_max = max(self.x_max, data_object.tmin + data_object.dt * data_object.num_samples)
-        elif self.data_type == Data_Type.FREQ_SIGNAL:
+        elif data_object.data_type == Data_Type.FREQ_SIGNAL:
             self.x_min = min(self.x_min, data_object.fmin)
             self.x_max = max(self.x_max, data_object.fmin + data_object.df * data_object.num_samples)
+
         self.plot_widget.setLimits(xMin=self.x_min, xMax=self.x_max)
 
-        # Affichage de la courbe
+        # Afficher les données du signal
         self.display_signal(data_id, curve)
 
+        # Synchroniser les ViewBox avec le graphique principal
+        self.update_viewbox_geometry()
+
+    def add_curve_with_extra_axis(self, curve, label, color):
+        """ Ajouter une courbe avec son propre axe Y à droite. """
+        viewbox = pg.ViewBox()
+        self.plot_widget.scene().addItem(viewbox)
+        viewbox.setXLink(self.plot_widget.plotItem.vb)  # Lier l'axe X avec le ViewBox principal
+
+        # Créer un nouvel axe Y à droite
+        axis = pg.AxisItem('right')
+        self.plot_widget.plotItem.layout.addItem(axis, 2, 3 + len(self.extra_axes))  # Ajouter l'axe à droite
+        axis.linkToView(viewbox)  # Lier l'axe Y au ViewBox
+        axis.setLabel(label, color=color)
+        # axis.setPen(pg.mkPen(color))
+        #afficher la grille
+        # axis.setGrid(255)
+
+        # Ajouter la courbe au nouveau ViewBox (lié au nouvel axe Y)
+        viewbox.addItem(curve)
+        self.extra_axes.append((axis, viewbox))
+
+        # S'assurer que les ViewBox sont bien synchronisés avec la taille du graphique
+        self.update_viewbox_geometry()
+
     def display_signal(self, data_id, curve=None):
-        """ Affiche les données spécifiques à data_id avec simplification.
-        :param
-        data_id: ID de la donnée à afficher
-        curve: Courbe à mettre à jour
-        """
+        """ Afficher les données pour un data_id spécifique """
         data_object = self.data_pool.get_data_info(data_id)['data_object'].iloc[0]
         num_samples = data_object.num_samples
-        dt = data_object.dt if self.data_type == Data_Type.TEMPORAL_SIGNAL else data_object.df
+        dt = data_object.dt if data_object.data_type == Data_Type.TEMPORAL_SIGNAL else data_object.df
         chunk_size = max(1, num_samples // self.max_points)
 
         x_data, y_data_min, y_data_max = [], [], []
@@ -102,7 +176,7 @@ class SignalPlotWidget(QWidget):
             y_data_min.append(np.min(chunk))
             y_data_max.append(np.max(chunk))
 
-        # Trace min/max data
+        # Affichage des points min/max
         x_data = np.repeat(x_data, 2)
         y_data = np.empty_like(x_data)
         y_data[0::2], y_data[1::2] = y_data_min, y_data_max
@@ -111,9 +185,8 @@ class SignalPlotWidget(QWidget):
         else:
             self.curves[data_id].setData(x_data, y_data)
 
-
     def handle_zoom(self, _, range):
-        """ Ajuste l'affichage pour se limiter aux bornes du zoom. """
+        """ Ajuster l'affichage du zoom. """
         x_min, x_max = range
         if x_min < self.x_min:
             x_min = self.x_min
@@ -122,12 +195,18 @@ class SignalPlotWidget(QWidget):
         for data_id, curve in self.curves.items():
             self.display_signal(data_id, curve)
 
+    def update_viewbox_geometry(self):
+        """ S'assurer que tous les ViewBox sont synchronisés avec la géométrie du graphique principal. """
+        for _, viewbox in self.extra_axes:
+            viewbox.setGeometry(self.plot_widget.plotItem.vb.sceneBoundingRect())
+            viewbox.linkedViewChanged(self.plot_widget.plotItem.vb, viewbox.XAxis)
+
     def set_selection_style(self, is_selected):
         """ Appliquer un style visuel pour la sélection. """
         self.plot_widget.setBackground('lightgray' if is_selected else 'w')
 
     def on_plot_clicked(self, event):
-        """ Gestion de clic pour sélection. """
+        """ Gestion de l'événement de clic pour la sélection du graphique. """
         if self.plot_widget.sceneBoundingRect().contains(event.scenePos()):
             if not self.selected:
                 self.select()
@@ -143,7 +222,7 @@ class SignalPlotWidget(QWidget):
         self.set_selection_style(False)
 
     def remove_data(self, data_id):
-        """ Supprime une courbe spécifique du plot. """
+        """ Supprimer une courbe spécifique du graphique. """
         if data_id in self.curves:
             curve = self.curves.pop(data_id)
             self.legend.removeItem(curve)
@@ -152,9 +231,8 @@ class SignalPlotWidget(QWidget):
 
     def is_compatible(self, data_id):
         """
-        Vérifie si la nouvelle donnée est compatible avec celles déjà affichées
-        en fonction de l'axe des abscisses (temps/fréquence).
-        Si le plot est vide (aucune donnée affichée), il est toujours compatible.
+        Vérifier si la nouvelle donnée est compatible avec celles déjà affichées.
+        Si le graphique est vide, elle est toujours compatible.
         """
         if not self.curves:
             return True
@@ -162,8 +240,8 @@ class SignalPlotWidget(QWidget):
         new_data_info = self.data_pool.get_data_info(data_id)
         new_data_object = new_data_info['data_object'].iloc[0]
         new_data_type = new_data_object.data_type
-
-        if new_data_type == self.data_type:
+        print(f"New data type: {new_data_type} - Current data type: {self.data_type}")
+        if new_data_type == self.data_type or self.data_type is None:
             return True
 
         if self.data_type == Data_Type.TEMPORAL_SIGNAL or self.data_type == Data_Type.TEMP_LIMITS:

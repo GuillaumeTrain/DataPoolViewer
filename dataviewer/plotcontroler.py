@@ -115,7 +115,7 @@ class PlotController(QWidget):
         Vérifie la compatibilité du domaine des abscisses.
         """
         # Chercher le plot sélectionné
-        selected_plot : SignalPlotWidget = next((plot for plot in self.plots if plot.selected), None)
+        selected_plot: SignalPlotWidget = next((plot for plot in self.plots if plot.selected), None)
 
         if selected_plot:
             # Vérification de compatibilité avec les données déjà présentes
@@ -124,10 +124,7 @@ class PlotController(QWidget):
                 return
 
             # Ajouter la donnée au plot
-            selected_plot.add_data(data_id,'b',)
+            selected_plot.add_data(data_id, 'b', )
             print(f"Data {data_id} added to the selected plot.")
         else:
             print("No plot selected to add data to.")
-
-
-

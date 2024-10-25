@@ -30,10 +30,15 @@ class MainWindow(QMainWindow):
                                                        False, time_step=tstep2, unit="V")
         self.datapool.store_data(temporal_data_id2, square_signal2, "source1")
 
-        # Ajouter un signal fréquentiel (FFT)
-        freq_signal = np.abs(np.fft.fft(square_signal))
-        freq_data_id = self.datapool.register_data(Data_Type.FREQ_SIGNAL, "FFT of Square Signal", "source2", False, False, freq_step=0.1, unit="dB")
-        self.datapool.store_data(freq_data_id, freq_signal, "source2")
+        #ajouter un troisième signal temporel
+        t3 = np.linspace(0, 1, 500)
+        #calculer le time step
+        tstep3 = t3[1] - t3[0]
+        square_signal3 = signal.square(2 * np.pi * 15 * t3)
+        temporal_data_id3 = self.datapool.register_data(Data_Type.TEMPORAL_SIGNAL, "Square Signal 15Hz", "source1", False,
+                                                       False, time_step=tstep3, unit="V")
+        self.datapool.store_data(temporal_data_id3, square_signal3, "source1")
+
 
         # Créer et ajouter le DatapoolVisualizer
         self.visualizer = DatapoolVisualizer(self.datapool, parent=self)
