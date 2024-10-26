@@ -1,21 +1,60 @@
 import numpy as np
 from PyDataCore import Data_Type
-from PySide6.QtWidgets import QVBoxLayout, QWidget
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QVBoxLayout, QWidget, QLabel, QSlider, QPushButton, QHBoxLayout
 import pyqtgraph as pg
 from scipy.stats import alpha
 
 
 class SignalPlotWidget(QWidget):
+    # def __init__(self, data_pool, parent=None):
+    #     super().__init__(parent)
+    #     self.selected = False
+    #     self.data_pool = data_pool
+    #     self.curves = {}  # Stocker les courbes par data_id
+    #     self.extra_axes = []  # Stocker les (AxisItem, ViewBox)
+    #     self.max_points = 500  # Limite de points affichés pour les performances
+    #     self.data_type = None
+    #     self.x_min = None
+    #     self.x_max = None
+    #
+    #     # PyQtGraph plot widget
+    #     self.plot_widget = pg.PlotWidget()
+    #     layout = QVBoxLayout()
+    #     layout.addWidget(self.plot_widget)
+    #     self.setLayout(layout)
+    #
+    #     # Légende pour les courbes multiples
+    #     self.legend = self.plot_widget.addLegend(offset=(10, 10))
+    #     self.plot_widget.setBackground('w')
+    #     self.plot_widget.setMouseEnabled(x=True, y=True)
+    #     self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
+    #
+    #     # Assurer la synchronisation des vues
+    #     self.plot_widget.getViewBox().sigXRangeChanged.connect(self.handle_zoom)
+    #     self.plot_widget.scene().sigMouseClicked.connect(self.on_plot_clicked)
+    #
+    #     # Assurer que l'axe Y gauche est visible dès le départ
+    #     self.plot_widget.plotItem.showAxis('right')
+    #     self.plot_widget.plotItem.hideAxis('left')
+    #     self.plot_widget.plotItem.showLabel('right')
+    #
+    #     # Synchroniser les redimensionnements pour les ViewBox
+    #     self.plot_widget.plotItem.vb.sigResized.connect(self.update_viewbox_geometry)
     def __init__(self, data_pool, parent=None):
         super().__init__(parent)
         self.selected = False
         self.data_pool = data_pool
-        self.curves = {}  # Stocker les courbes par data_id
-        self.extra_axes = []  # Stocker les (AxisItem, ViewBox)
-        self.max_points = 500  # Limite de points affichés pour les performances
+        self.curves = {}
+        self.extra_axes = []
+        self.max_points = 500
         self.data_type = None
         self.x_min = None
         self.x_max = None
+        self.fft_timer = QTimer(self)  # Timer for FFT animation
+        self.fft_timer.timeout.connect(self.update_animation_frame)
+        self.current_frame = 0  # Current frame in the FFT sequence
+        self.is_animating = False  # Animation state
 
         # PyQtGraph plot widget
         self.plot_widget = pg.PlotWidget()
@@ -23,26 +62,34 @@ class SignalPlotWidget(QWidget):
         layout.addWidget(self.plot_widget)
         self.setLayout(layout)
 
-        # Légende pour les courbes multiples
+        # Animation Controls
+        self.init_animation_controls(layout)
+
+        # Legend and plot setup
         self.legend = self.plot_widget.addLegend(offset=(10, 10))
         self.plot_widget.setBackground('w')
         self.plot_widget.setMouseEnabled(x=True, y=True)
         self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
 
-        # Assurer la synchronisation des vues
+        # Sync view boxes
         self.plot_widget.getViewBox().sigXRangeChanged.connect(self.handle_zoom)
         self.plot_widget.scene().sigMouseClicked.connect(self.on_plot_clicked)
-
-        # Assurer que l'axe Y gauche est visible dès le départ
         self.plot_widget.plotItem.showAxis('right')
         self.plot_widget.plotItem.hideAxis('left')
         self.plot_widget.plotItem.showLabel('right')
-
-        # Synchroniser les redimensionnements pour les ViewBox
         self.plot_widget.plotItem.vb.sigResized.connect(self.update_viewbox_geometry)
 
     def add_data(self, data_id, color='b'):
         """ Ajouter une courbe au graphique et lui assigner un axe Y si nécessaire. """
+        """Add data to the plot and handle FFTS data specifically for animation."""
+        data_info = self.data_pool.get_data_info(data_id)
+        data_object = data_info['data_object'].iloc[0]
+
+        # Check if this is FFT data
+        if data_object.data_type == Data_Type.FFTS:
+            self.setup_fft_animation(data_object, color)
+            return  # FFT data handled, no further processing
+
         if data_id in self.curves:
             print(f"Data {data_id} already displayed.")
             return
@@ -59,10 +106,15 @@ class SignalPlotWidget(QWidget):
         # Couleur par défaut pour les limites
         color = 'r' if is_limit else color
 
-        # Initialisation des x_min et x_max pour le graphique
-        if self.x_min is None or self.x_max is None:
-            self.x_min = data_object.tmin
-            self.x_max = data_object.tmin + data_object.dt * data_object.num_samples
+        # Initialisation des x_min et x_max pour le graphique selon le type de signal
+        if data_object.data_type == Data_Type.TEMPORAL_SIGNAL:
+            if self.x_min is None or self.x_max is None:
+                self.x_min = data_object.tmin
+                self.x_max = data_object.tmin + data_object.dt * data_object.num_samples
+        elif data_object.data_type == Data_Type.FREQ_SIGNAL:
+            if self.x_min is None or self.x_max is None:
+                self.x_min = data_object.fmin
+                self.x_max = data_object.fmin + data_object.df * data_object.num_samples
 
         # Si c'est la première courbe, créer un ViewBox séparé pour elle
         if len(self.curves) == 0:
@@ -252,3 +304,91 @@ class SignalPlotWidget(QWidget):
                 return True
 
         return False
+
+    def init_animation_controls(self, layout):
+        """ Initialize animation playback controls for FFT data. """
+        control_layout = QHBoxLayout()
+
+        # Play button
+        self.play_button = QPushButton("Play")
+        self.play_button.clicked.connect(self.play_animation)
+        control_layout.addWidget(self.play_button)
+
+        # Pause button
+        self.pause_button = QPushButton("Pause")
+        self.pause_button.clicked.connect(self.pause_animation)
+        control_layout.addWidget(self.pause_button)
+
+        # Stop button
+        self.stop_button = QPushButton("Stop")
+        self.stop_button.clicked.connect(self.stop_animation)
+        control_layout.addWidget(self.stop_button)
+
+        # Timestamp slider
+        self.timestamp_slider = QSlider()
+        self.timestamp_slider.setOrientation(pg.QtCore.Qt.Horizontal)
+        self.timestamp_slider.valueChanged.connect(self.seek_frame)
+        control_layout.addWidget(self.timestamp_slider)
+
+        # Current frame label
+        self.frame_label = QLabel("Frame: 0")
+        control_layout.addWidget(self.frame_label)
+
+        layout.addLayout(control_layout)
+
+    def setup_fft_animation(self, fft_data, color):
+        """Setup the plot and slider for FFT animation."""
+        self.fft_data = fft_data  # Store FFT data for playback
+        self.timestamp_slider.setMaximum(len(fft_data.fft_signals) - 1)
+        self.timestamp_slider.setValue(0)
+        self.current_frame = 0
+        self.is_animating = False
+
+        # Create a curve for FFT data
+        self.fft_curve = self.plot_widget.plot(pen=pg.mkPen(color))
+        self.curves[fft_data.data_id] = self.fft_curve
+        self.legend.addItem(self.fft_curve, name=fft_data.data_name)
+
+        # Display the first frame
+        self.display_fft_frame(0)
+
+    def display_fft_frame(self, frame_index):
+        """Display a single FFT frame (frequency domain data) by index."""
+        fft_signal = self.fft_data.fft_signals[frame_index]
+        freq_range = np.linspace(fft_signal.fmin, fft_signal.fmin + fft_signal.df * fft_signal.num_samples,
+                                 fft_signal.num_samples)
+        self.fft_curve.setData(freq_range, fft_signal.data)
+        self.frame_label.setText(f"Frame: {frame_index}")
+
+    def play_animation(self):
+        """Start or resume the FFT animation."""
+        if not self.is_animating:
+            self.fft_timer.start(100)  # Update every 100 ms
+            self.is_animating = True
+
+    def pause_animation(self):
+        """Pause the FFT animation."""
+        self.fft_timer.stop()
+        self.is_animating = False
+
+    def stop_animation(self):
+        """Stop the FFT animation and reset to the first frame."""
+        self.fft_timer.stop()
+        self.is_animating = False
+        self.current_frame = 0
+        self.timestamp_slider.setValue(0)
+        self.display_fft_frame(0)
+
+    def update_animation_frame(self):
+        """Advance the animation to the next frame."""
+        if self.current_frame < len(self.fft_data.fft_signals) - 1:
+            self.current_frame += 1
+            self.timestamp_slider.setValue(self.current_frame)
+            self.display_fft_frame(self.current_frame)
+        else:
+            self.stop_animation()  # End animation when reaching the last frame
+
+    def seek_frame(self, frame_index):
+        """Seek to a specific frame in the FFT animation."""
+        self.current_frame = frame_index
+        self.display_fft_frame(frame_index)
