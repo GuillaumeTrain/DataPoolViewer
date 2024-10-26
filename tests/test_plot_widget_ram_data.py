@@ -27,7 +27,7 @@ class MainWindow(QMainWindow):
         data_id = datapool.register_data(Data_Type.TEMPORAL_SIGNAL, "square_signal", "source", False, False,
                                          time_step=sampling_interval, unit="V")
         datapool.store_data(data_id, square_signal, "source", "./")
-        signal_plot_widget = SignalPlotWidget(datapool, data_id, signal_name="Square Signal", color='r', parent=self)
+        signal_plot_widget = SignalPlotWidget(datapool, data_id, parent=self)
 
         # Créer un QDockWidget pour rendre le plot détachable
         self.create_dockable_view(signal_plot_widget)

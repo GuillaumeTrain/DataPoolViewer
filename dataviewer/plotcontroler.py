@@ -109,22 +109,50 @@ class PlotController(QWidget):
             self.plots.remove(plot)
             print(f"Plot {plot} removed.")
 
+    # def add_data_to_selected_plot(self, data_id):
+    #     """
+    #     Ajoute une donnée sélectionnée au plot actuellement sélectionné.
+    #     Vérifie la compatibilité du domaine des abscisses.
+    #     """
+    #     # Chercher le plot sélectionné
+    #     selected_plot: SignalPlotWidget = next((plot for plot in self.plots if plot.selected), None)
+    #
+    #     if selected_plot:
+    #         # Vérification de compatibilité avec les données déjà présentes
+    #         if not selected_plot.is_compatible(data_id):
+    #             print(f"Incompatible data for the selected plot.")
+    #             return
+    #
+    #         # Ajouter la donnée au plot
+    #         selected_plot.add_data(data_id, 'b', )
+    #         print(f"Data {data_id} added to the selected plot.")
+    #     else:
+    #         print("No plot selected to add data to.")
     def add_data_to_selected_plot(self, data_id):
         """
-        Ajoute une donnée sélectionnée au plot actuellement sélectionné.
-        Vérifie la compatibilité du domaine des abscisses.
+        Adds selected data to the currently selected plot, supporting FFT playback.
         """
-        # Chercher le plot sélectionné
-        selected_plot: SignalPlotWidget = next((plot for plot in self.plots if plot.selected), None)
+        selected_plot = next((plot for plot in self.plots if plot.selected), None)
 
         if selected_plot:
-            # Vérification de compatibilité avec les données déjà présentes
-            if not selected_plot.is_compatible(data_id):
-                print(f"Incompatible data for the selected plot.")
-                return
+            data_info = self.data_pool.get_data_info(data_id)
+            data_object = data_info['data_object'].iloc[0]
+            data_type = data_object.data_type
 
-            # Ajouter la donnée au plot
-            selected_plot.add_data(data_id, 'b', )
-            print(f"Data {data_id} added to the selected plot.")
+            if data_type in [Data_Type.TEMPORAL_SIGNAL, Data_Type.FREQ_SIGNAL]:
+                # Regular temporal or frequency data addition
+                if selected_plot.is_compatible(data_id):
+                    selected_plot.add_data(data_id, 'b')
+                    print(f"Data {data_id} added to selected plot.")
+                else:
+                    print("Incompatible data for selected plot.")
+
+            elif data_type == Data_Type.FFTS:
+                # Trigger FFT playback setup if FFT data is selected
+                selected_plot.setup_fft_animation(data_object, 'b')
+                print(f"FFT data {data_id} added with playback controls.")
+
+            else:
+                print(f"Data type {data_type} not supported for plotting.")
         else:
             print("No plot selected to add data to.")

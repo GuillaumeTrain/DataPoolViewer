@@ -34,28 +34,51 @@ class DatapoolVisualizer(QWidget):
         # Connecter l'événement de sélection d'une donnée dans le DataPoolViewerWidget
         self.data_pool_viewer.tree_view.clicked.connect(self.handle_data_selection)
 
+    # def handle_data_selection(self, index):
+    #     """
+    #     Gestion de la sélection d'une donnée dans le DataPoolViewerWidget.
+    #     Si la donnée est de type temporel ou fréquentiel, elle est ajoutée au plot sélectionné.
+    #     """
+    #     # Récupérer l'ID de la donnée sélectionnée dans le DataPoolViewerWidget
+    #     item = self.data_pool_viewer.tree_view.model().itemFromIndex(index)
+    #     if item is None:
+    #         return
+    #
+    #     # Extraire l'ID de la donnée depuis l'élément sélectionné (en supposant qu'il est dans le texte de l'élément)
+    #     item_text = item.text()
+    #     if "Data Name:" in item_text:
+    #         data_id = self.extract_data_id_from_text(item_text)
+    #
+    #         # Récupérer les informations de la donnée via le DataPool
+    #         data_info = self.data_pool.get_data_info(data_id)
+    #         data_type = data_info['data_object'].iloc[0].data_type
+    #
+    #         # Vérifier si la donnée est temporelle ou fréquentielle
+    #         if data_type in [Data_Type.TEMPORAL_SIGNAL, Data_Type.FREQ_SIGNAL]:
+    #             # Ajouter la donnée au plot sélectionné
+    #             self.plot_controller.add_data_to_selected_plot(data_id)
+    #         else:
+    #             print(f"Data type {data_type} is not supported for plotting.")
+    #     else:
+    #         print("Selected item is not a data entry.")
     def handle_data_selection(self, index):
         """
-        Gestion de la sélection d'une donnée dans le DataPoolViewerWidget.
-        Si la donnée est de type temporel ou fréquentiel, elle est ajoutée au plot sélectionné.
+        Handle data selection in DataPoolViewerWidget.
+        Trigger playback for FFT data if selected.
         """
-        # Récupérer l'ID de la donnée sélectionnée dans le DataPoolViewerWidget
         item = self.data_pool_viewer.tree_view.model().itemFromIndex(index)
         if item is None:
             return
 
-        # Extraire l'ID de la donnée depuis l'élément sélectionné (en supposant qu'il est dans le texte de l'élément)
+        # Extract data ID from selected item
         item_text = item.text()
         if "Data Name:" in item_text:
             data_id = self.extract_data_id_from_text(item_text)
-
-            # Récupérer les informations de la donnée via le DataPool
             data_info = self.data_pool.get_data_info(data_id)
             data_type = data_info['data_object'].iloc[0].data_type
 
-            # Vérifier si la donnée est temporelle ou fréquentielle
-            if data_type in [Data_Type.TEMPORAL_SIGNAL, Data_Type.FREQ_SIGNAL]:
-                # Ajouter la donnée au plot sélectionné
+            # Route temporal, frequency, or FFT data types to PlotController
+            if data_type in [Data_Type.TEMPORAL_SIGNAL, Data_Type.FREQ_SIGNAL, Data_Type.FFTS]:
                 self.plot_controller.add_data_to_selected_plot(data_id)
             else:
                 print(f"Data type {data_type} is not supported for plotting.")
