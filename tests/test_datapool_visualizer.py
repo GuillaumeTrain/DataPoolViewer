@@ -4,7 +4,7 @@ from PyDataCore import DataPool, Data_Type
 from scipy import signal
 import numpy as np
 
-from dataviewer.datapoolvisualizer import DatapoolVisualizer
+from dataviewer.datapool_visualizer import DatapoolVisualizer
 
 
 class MainWindow(QMainWindow):

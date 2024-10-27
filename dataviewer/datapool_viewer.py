@@ -31,6 +31,10 @@ class DataPoolViewerWidget(QWidget):
         """
         Remplit le TreeView avec toutes les colonnes des registres.
         """
+        # vider le modèle
+        self.model.clear()
+        # Parcourir les sources
+        source_item = None
         for _, source_row in source_to_data.iterrows():
             source_id = source_row['source_id']
             locked = source_row['locked']
@@ -61,8 +65,8 @@ class DataPoolViewerWidget(QWidget):
                 # Ajouter la donnée comme sous-élément de la source
                 source_item.appendRow(data_item)
 
-            # Ajouter la source à l'arborescence principale
-            self.model.appendRow(source_item)
+        # Ajouter la source à l'arborescence principale
+        self.model.appendRow(source_item)
 
 
 class DataPoolNotifier(QObject):
