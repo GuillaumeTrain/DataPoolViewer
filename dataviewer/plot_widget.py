@@ -158,7 +158,7 @@ class SignalPlotWidget(QWidget):
         # Check if this is FFT data
         if data_object.data_type == Data_Type.FFTS:
             print(f"FFT data detected: {data_object.data_name}")
-            curve,axis = self.setup_fft_animation(data_object, color)
+            curve, axis = self.setup_fft_animation(data_object, color)
             axis.setLabel(data_object.data_name, color=color)
             axis.linkToView(viewbox)  # Lier l'axe Y au ViewBox
             axis = pg.AxisItem('right')
@@ -207,7 +207,8 @@ class SignalPlotWidget(QWidget):
         """ Afficher les données pour un data_id spécifique """
 
         data_object = self.data_pool.get_data_info(data_id)['data_object'].iloc[0]
-        print(f"Displaying data for {data_object.data_name}, type: {data_object.data_type},data_id: {data_id},data_object: {data_object}")
+        print(
+            f"Displaying data for {data_object.data_name}, type: {data_object.data_type},data_id: {data_id},data_object: {data_object}")
         if data_object.data_type == Data_Type.FFTS:
             self.curves[data_id] = self.fft_curve
             self.display_fft_frame(0)
@@ -259,7 +260,7 @@ class SignalPlotWidget(QWidget):
 
         # Display the first frame
         self.display_fft_frame(0)
-        return self.fft_curve,axis
+        return self.fft_curve, axis
 
     def init_animation_controls(self, parent_widget):
         """ Initialize animation playback controls for FFT data. """
@@ -501,7 +502,7 @@ class SignalPlotWidget(QWidget):
                 self.shared_axis = pg.AxisItem('right')
                 self.shared_axis.setGrid(150)
                 # Ajouter l'axe partagé à droite du layout
-                self.plot_widget.plotItem.layout.addItem(self.shared_axis, 2, 3+len(self.extra_axes))
+                self.plot_widget.plotItem.layout.addItem(self.shared_axis, 2, 3 + len(self.extra_axes))
 
             # Lier l'axe partagé au ViewBox principal
             self.shared_axis.linkToView(self.plot_widget.plotItem.vb)
