@@ -109,25 +109,7 @@ class PlotController(QWidget):
             self.plots.remove(plot)
             print(f"Plot {plot} removed.")
 
-    # def add_data_to_selected_plot(self, data_id):
-    #     """
-    #     Ajoute une donnée sélectionnée au plot actuellement sélectionné.
-    #     Vérifie la compatibilité du domaine des abscisses.
-    #     """
-    #     # Chercher le plot sélectionné
-    #     selected_plot: SignalPlotWidget = next((plot for plot in self.plots if plot.selected), None)
-    #
-    #     if selected_plot:
-    #         # Vérification de compatibilité avec les données déjà présentes
-    #         if not selected_plot.is_compatible(data_id):
-    #             print(f"Incompatible data for the selected plot.")
-    #             return
-    #
-    #         # Ajouter la donnée au plot
-    #         selected_plot.add_data(data_id, 'b', )
-    #         print(f"Data {data_id} added to the selected plot.")
-    #     else:
-    #         print("No plot selected to add data to.")
+
     def add_data_to_selected_plot(self, data_id):
         """
         Adds selected data to the currently selected plot, supporting FFT playback.

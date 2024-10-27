@@ -1,46 +1,15 @@
 import numpy as np
 from PyDataCore import Data_Type
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QVBoxLayout, QWidget, QLabel, QSlider, QPushButton, QHBoxLayout
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QVBoxLayout, QWidget, QLabel, QSlider, QPushButton, QHBoxLayout, QColorDialog
 import pyqtgraph as pg
+from pyqtgraph import mkColor, mkPen
 from scipy.stats import alpha
+import colorsys
 
 
 class SignalPlotWidget(QWidget):
-    # def __init__(self, data_pool, parent=None):
-    #     super().__init__(parent)
-    #     self.selected = False
-    #     self.data_pool = data_pool
-    #     self.curves = {}  # Stocker les courbes par data_id
-    #     self.extra_axes = []  # Stocker les (AxisItem, ViewBox)
-    #     self.max_points = 500  # Limite de points affichés pour les performances
-    #     self.data_type = None
-    #     self.x_min = None
-    #     self.x_max = None
-    #
-    #     # PyQtGraph plot widget
-    #     self.plot_widget = pg.PlotWidget()
-    #     layout = QVBoxLayout()
-    #     layout.addWidget(self.plot_widget)
-    #     self.setLayout(layout)
-    #
-    #     # Légende pour les courbes multiples
-    #     self.legend = self.plot_widget.addLegend(offset=(10, 10))
-    #     self.plot_widget.setBackground('w')
-    #     self.plot_widget.setMouseEnabled(x=True, y=True)
-    #     self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
-    #
-    #     # Assurer la synchronisation des vues
-    #     self.plot_widget.getViewBox().sigXRangeChanged.connect(self.handle_zoom)
-    #     self.plot_widget.scene().sigMouseClicked.connect(self.on_plot_clicked)
-    #
-    #     # Assurer que l'axe Y gauche est visible dès le départ
-    #     self.plot_widget.plotItem.showAxis('right')
-    #     self.plot_widget.plotItem.hideAxis('left')
-    #     self.plot_widget.plotItem.showLabel('right')
-    #
-    #     # Synchroniser les redimensionnements pour les ViewBox
-    #     self.plot_widget.plotItem.vb.sigResized.connect(self.update_viewbox_geometry)
     def __init__(self, data_pool, parent=None):
         super().__init__(parent)
         self.selected = False
@@ -56,17 +25,26 @@ class SignalPlotWidget(QWidget):
         self.current_frame = 0  # Current frame in the FFT sequence
         self.is_animating = False  # Animation state
 
+        # Layout principal
+        main_layout = QVBoxLayout(self)
+        self.setLayout(main_layout)
+
         # PyQtGraph plot widget
         self.plot_widget = pg.PlotWidget()
         layout = QVBoxLayout()
         layout.addWidget(self.plot_widget)
-        self.setLayout(layout)
+        main_layout.addLayout(layout)
 
         # Animation Controls
-        self.init_animation_controls(layout)
+        self.init_animation_controls(main_layout)
+
+        # Widget de légende en dessous
+        self.legend_widget = QWidget()
+        self.legend_layout = QHBoxLayout(self.legend_widget)
+        main_layout.addWidget(self.legend_widget)
 
         # Legend and plot setup
-        self.legend = self.plot_widget.addLegend(offset=(10, 10))
+        # self.legend = self.plot_widget.addLegend(offset=(10, 10))
         self.plot_widget.setBackground('w')
         self.plot_widget.setMouseEnabled(x=True, y=True)
         self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
@@ -103,8 +81,7 @@ class SignalPlotWidget(QWidget):
         if data_object.data_type in (Data_Type.TEMP_LIMITS, Data_Type.FREQ_LIMITS):
             is_limit = True
 
-        # Couleur par défaut pour les limites
-        color = 'r' if is_limit else color
+
 
         # Initialisation des x_min et x_max pour le graphique selon le type de signal
         if data_object.data_type == Data_Type.TEMPORAL_SIGNAL:
@@ -167,7 +144,7 @@ class SignalPlotWidget(QWidget):
 
         # Ajouter la courbe à la liste des courbes tracées
         self.curves[data_id] = curve
-        self.legend.addItem(curve, name=data_object.data_name)
+        # self.legend.addItem(curve, name=data_object.data_name)
 
         # Mettre à jour les limites en fonction de la nouvelle courbe
         if data_object.data_type == Data_Type.TEMPORAL_SIGNAL:
@@ -184,6 +161,28 @@ class SignalPlotWidget(QWidget):
 
         # Synchroniser les ViewBox avec le graphique principal
         self.update_viewbox_geometry()
+
+        # Ajouter un élément de légende en dessous
+        self.add_legend_item(data_id, data_object.data_name, color=color)
+
+        # redefinir une couleur qui change en fonction du nombre de courbes pour toutes les courbes
+        for i, dataid in enumerate(self.curves):
+
+            # recuperer le type de la data
+            datacurve = self.data_pool.get_data_info(dataid)['data_object'].iloc[0]
+            datatype = datacurve.data_type
+            # si la data est une limite alors on change la couleur en rouge
+            if datatype in (Data_Type.TEMP_LIMITS, Data_Type.FREQ_LIMITS):
+                color = 'r'
+            else:
+                # couleur en fonction de l'index de la courbe
+                color = self.generate_color(i, len(self.curves))
+                # recuperer le label de la courbe
+                print(f"Data name: {datacurve.data_name}")
+                label, colorbutton = self.find_label_and_color_button_by_data_name(datacurve.data_name)
+                print(f"Label: {label}")
+                # changer la couleur de la courbe
+                self.change_curve_color(dataid, label, colorbutton, rgb_color=color)
 
     def add_curve_with_extra_axis(self, curve, label, color):
         """ Ajouter une courbe avec son propre axe Y à droite. """
@@ -392,3 +391,53 @@ class SignalPlotWidget(QWidget):
         """Seek to a specific frame in the FFT animation."""
         self.current_frame = frame_index
         self.display_fft_frame(frame_index)
+
+    def add_legend_item(self, data_id, name, color):
+        """ Crée un élément de légende cliquable pour changer la couleur de la courbe. """
+        label = QLabel(name)
+        label.setStyleSheet(f"font-weight: bold;")
+
+        # Bouton pour changer la couleur
+        color_button = QPushButton("")
+        color_button.setStyleSheet(f"background-color: {color};")
+        color_button.clicked.connect(lambda: self.change_curve_color(data_id, label, color_button))
+
+        # Ajouter au layout de la légende
+        self.legend_layout.addWidget(label)
+        self.legend_layout.addWidget(color_button)
+
+    def find_label_and_color_button_by_data_name(self, data_name):
+        """ Trouver l'élément de légende correspondant au nom de la donnée. """
+        for i in range(0, self.legend_layout.count(), 2):
+            label = self.legend_layout.itemAt(i).widget()
+            print(label.text())
+            if data_name in label.text():
+                # Trouver le bouton de couleur correspondant
+                color_button = self.legend_layout.itemAt(i + 1).widget()
+                return label, color_button
+
+    def change_curve_color(self, data_id, label, color_button=None, rgb_color=None):
+        """ Permet de changer la couleur de la courbe en cliquant sur l'élément de légende. """
+        color = None
+        if rgb_color:
+            color = QColor(rgb_color)
+        elif color_button:
+            color = QColorDialog.getColor()
+
+        if color.isValid():
+            hex_color = color.name()
+            label.setStyleSheet(f"font-weight: bold;")
+            color_button.setStyleSheet(f"background-color: {hex_color};")
+            self.curves[data_id].setPen(pg.mkPen(hex_color))
+
+
+    def generate_color(self, index, num_curves):
+        """
+        Génère une couleur unique en fonction de l'index et du nombre de courbes.
+        Exclut le rouge en évitant les teintes proches de 0 ou 1.
+        """
+        # Ajuster l'index pour éviter les teintes proches de 0 ou 1
+        hue = (index / num_curves) * 0.8 + 0.1  # Décalage pour éviter le rouge (autour de 0 ou 1)
+        hue = hue % 1.0  # Assurer que la teinte est dans [0, 1]
+        rgb = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+        return pg.mkColor(int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255))
