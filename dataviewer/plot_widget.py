@@ -4,7 +4,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QVBoxLayout, QWidget, QLabel, QSlider, QPushButton, QHBoxLayout, QColorDialog
 import pyqtgraph as pg
-from pyqtgraph import mkColor, mkPen
+from pyqtgraph import mkColor, mkPen, PlotItem
 from scipy.stats import alpha
 import colorsys
 
@@ -24,6 +24,7 @@ class SignalPlotWidget(QWidget):
         self.fft_timer.timeout.connect(self.update_animation_frame)
         self.current_frame = 0  # Current frame in the FFT sequence
         self.is_animating = False  # Animation state
+        self.y_axis_grouped = False  # Y-axis grouping state
 
         # Layout principal
         main_layout = QVBoxLayout(self)
@@ -201,28 +202,6 @@ class SignalPlotWidget(QWidget):
                 print(f"Label: {label}")
                 # changer la couleur de la courbe
                 self.change_curve_color(dataid, label, colorbutton, rgb_color=color)
-
-    # def add_curve_with_extra_axis(self, curve, label, color):
-    #     """ Ajouter une courbe avec son propre axe Y à droite. """
-    #     viewbox = pg.ViewBox()
-    #     self.plot_widget.scene().addItem(viewbox)
-    #     viewbox.setXLink(self.plot_widget.plotItem.vb)  # Lier l'axe X avec le ViewBox principal
-    #
-    #     # Créer un nouvel axe Y à droite
-    #     axis = pg.AxisItem('right')
-    #     self.plot_widget.plotItem.layout.addItem(axis, 2, 3 + len(self.extra_axes))  # Ajouter l'axe à droite
-    #     axis.linkToView(viewbox)  # Lier l'axe Y au ViewBox
-    #     axis.setLabel(label, color=color)
-    #     # axis.setPen(pg.mkPen(color))
-    #     #afficher la grille
-    #     # axis.setGrid(255)
-    #
-    #     # Ajouter la courbe au nouveau ViewBox (lié au nouvel axe Y)
-    #     viewbox.addItem(curve)
-    #     self.extra_axes.append((axis, viewbox))
-    #
-    #     # S'assurer que les ViewBox sont bien synchronisés avec la taille du graphique
-    #     self.update_viewbox_geometry()
 
     def display_signal(self, data_id, curve=None):
         """ Afficher les données pour un data_id spécifique """
@@ -468,3 +447,87 @@ class SignalPlotWidget(QWidget):
                 return True
 
         return False
+
+    # def toggle_y_axis_grouping(self, group_y_axes=True):
+    #     """
+    #     Active ou désactive le regroupement des axes Y en un seul axe partagé.
+    #     """
+    #     if group_y_axes:
+    #         # Activer un axe Y unique pour toutes les courbes
+    #         self.plot_widget.plotItem.hideAxis('right')  # Cache tous les axes individuels
+    #         if not hasattr(self, 'shared_axis'):
+    #             # Ajouter un seul axe Y partagé si non existant
+    #             self.shared_axis = pg.AxisItem('right')
+    #             self.shared_axis.setGrid(150)
+    #             #masquer tous les axes Y de extra_axes
+    #             for axis, _ in self.extra_axes:
+    #                 axis.hide()
+    #             #ajouter l'axe partagé
+    #             self.extra_axes.append(self.shared_axis)
+    #             #ajouter l'axe partagé au layout
+    #             self.plot_widget.plotItem.layout.addItem(self.shared_axis, 2, 3 + len(self.extra_axes))
+    #             #lier l'axe partagé a tous les autres axes
+    #             for _, viewbox in self.extra_axes:
+    #                 self.shared_axis.linkToView(viewbox)
+    #             # self.shared_axis.linkToView(self.plot_widget.plotItem.vb)
+    #         # Déplacer toutes les courbes sur le même ViewBox
+    #         for curve in self.curves.values():
+    #             self.plot_widget.plotItem.vb.addItem(curve)
+    #     else:
+    #         # Désactiver l'axe Y unique et rétablir les axes individuels
+    #         if hasattr(self, 'shared_axis'):
+    #             self.plot_widget.plotItem.layout.removeItem(self.shared_axis)
+    #             del self.shared_axis
+    #         #retirer l'axe partagé de extra_axes
+    #         self.extra_axes.remove(self.shared_axis)
+    #         # Rétablir les axes individuels pour chaque courbe
+    #         for i, (axis, viewbox) in enumerate(self.extra_axes):
+    #             #montrer les axes Y
+    #             axis.show()
+    #             # self.plot_widget.plotItem.layout.addItem(axis, 2, 3 + i)
+    #             axis.linkToView(viewbox)
+    def toggle_y_axis_grouping(self):
+        """
+        Active ou désactive l'affichage d'un axe Y partagé, sans modifier les ViewBoxes.
+        """
+        if not self.y_axis_grouped:
+            # Activer un axe Y unique pour toutes les courbes
+            # Cacher tous les axes individuels
+            for axis, viewbox in self.extra_axes:
+                axis.hide()
+
+            # Ajouter un seul axe Y partagé si non existant
+            if not hasattr(self, 'shared_axis'):
+                self.shared_axis = pg.AxisItem('right')
+                self.shared_axis.setGrid(150)
+                # Ajouter l'axe partagé à droite du layout
+                self.plot_widget.plotItem.layout.addItem(self.shared_axis, 2, 3+len(self.extra_axes))
+
+            # Lier l'axe partagé au ViewBox principal
+            self.shared_axis.linkToView(self.plot_widget.plotItem.vb)
+
+            # Synchroniser tous les ViewBoxes avec le ViewBox principal
+            for _, viewbox in self.extra_axes:
+                viewbox.setYLink(self.plot_widget.plotItem.vb)
+
+            # Afficher l'axe partagé
+            self.shared_axis.show()
+            self.y_axis_grouped = True
+
+        else:
+            # Désactiver l'axe Y unique et rétablir les axes individuels
+            if hasattr(self, 'shared_axis'):
+                # Cacher l'axe partagé au lieu de le supprimer
+                self.shared_axis.hide()
+
+            # Dissocier les liens Y de tous les ViewBoxes
+            for _, viewbox in self.extra_axes:
+                viewbox.setYLink(None)
+
+            # Réafficher les axes individuels
+            for i, (axis, viewbox) in enumerate(self.extra_axes):
+                axis.show()
+                axis.linkToView(viewbox)  # Relier chaque axe Y à son viewbox spécifique
+                self.plot_widget.plotItem.layout.addItem(axis, 2, 3 + i)  # Réajouter chaque axe à droite dans le layout
+
+            self.y_axis_grouped = False

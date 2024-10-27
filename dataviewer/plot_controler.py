@@ -37,6 +37,24 @@ class PlotController(QWidget):
         remove_plots_button.clicked.connect(self.remove_selected_plots)
         control_layout.addWidget(remove_plots_button)
 
+        # bouton pour grouper/dégrouper les axes Y
+        toggle_y_axes_button = QPushButton("Grouper/Dégrouper les axes Y")
+        toggle_y_axes_button.clicked.connect(self.toggle_y_axis_grouping)
+        control_layout.addWidget(toggle_y_axes_button)
+
+    def toggle_y_axis_grouping(self):
+        """
+        Active ou désactive le regroupement des axes Y pour le plot sélectionné.
+        """
+        selected_plots : SignalPlotWidget = [plot for plot in self.plots if plot.selected]
+
+        if selected_plots:
+            for selected_plot in  selected_plots:
+                selected_plot.toggle_y_axis_grouping()
+            print(f"Toggled Y-axis grouping for the selected plot. axes grouped: {selected_plot.y_axis_grouped}")
+        else:
+            print("No plot selected to toggle Y-axis grouping.")
+
     def add_plot(self):
         """
         Ajoute un nouveau plot dans la fenêtre.
@@ -108,7 +126,6 @@ class PlotController(QWidget):
             plot.deleteLater()  # Supprime le widget de manière propre
             self.plots.remove(plot)
             print(f"Plot {plot} removed.")
-
 
     def add_data_to_selected_plot(self, data_id):
         """
