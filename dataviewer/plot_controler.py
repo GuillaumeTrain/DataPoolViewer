@@ -120,7 +120,7 @@ class PlotController(QWidget):
             data_info = self.data_pool.get_data_info(data_id)
             data_object = data_info['data_object'].iloc[0]
             data_type = data_object.data_type
-
+            selected_plot : SignalPlotWidget
             if data_type in [Data_Type.TEMPORAL_SIGNAL, Data_Type.FREQ_SIGNAL]:
                 # Regular temporal or frequency data addition
                 if selected_plot.is_compatible(data_id):
@@ -131,7 +131,8 @@ class PlotController(QWidget):
 
             elif data_type == Data_Type.FFTS:
                 # Trigger FFT playback setup if FFT data is selected
-                selected_plot.setup_fft_animation(data_object, 'b')
+                # selected_plot.setup_fft_animation(data_object, 'b')
+                selected_plot.add_data(data_id, 'b')
                 print(f"FFT data {data_id} added with playback controls.")
 
             else:

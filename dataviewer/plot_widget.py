@@ -1,5 +1,5 @@
 import numpy as np
-from PyDataCore import Data_Type
+from PyDataCore import Data_Type, FreqSignalData, FFTSData
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QVBoxLayout, QWidget, QLabel, QSlider, QPushButton, QHBoxLayout, QColorDialog
@@ -35,8 +35,14 @@ class SignalPlotWidget(QWidget):
         layout.addWidget(self.plot_widget)
         main_layout.addLayout(layout)
 
-        # Animation Controls
-        self.init_animation_controls(main_layout)
+        # # Animation Controls
+        #
+        # self.init_animation_controls(main_layout)
+        # Animation Controls (initially hidden)
+        self.animation_controls = QWidget()
+        self.animation_controls.setVisible(False)  # Start hidden
+        self.init_animation_controls(self.animation_controls)
+        main_layout.addWidget(self.animation_controls)
 
         # Widget de légende en dessous
         self.legend_widget = QWidget()
@@ -60,13 +66,6 @@ class SignalPlotWidget(QWidget):
     def add_data(self, data_id, color='b'):
         """ Ajouter une courbe au graphique et lui assigner un axe Y si nécessaire. """
         """Add data to the plot and handle FFTS data specifically for animation."""
-        data_info = self.data_pool.get_data_info(data_id)
-        data_object = data_info['data_object'].iloc[0]
-
-        # Check if this is FFT data
-        if data_object.data_type == Data_Type.FFTS:
-            self.setup_fft_animation(data_object, color)
-            return  # FFT data handled, no further processing
 
         if data_id in self.curves:
             print(f"Data {data_id} already displayed.")
@@ -81,17 +80,36 @@ class SignalPlotWidget(QWidget):
         if data_object.data_type in (Data_Type.TEMP_LIMITS, Data_Type.FREQ_LIMITS):
             is_limit = True
 
-
-
         # Initialisation des x_min et x_max pour le graphique selon le type de signal
+
         if data_object.data_type == Data_Type.TEMPORAL_SIGNAL:
             if self.x_min is None or self.x_max is None:
                 self.x_min = data_object.tmin
                 self.x_max = data_object.tmin + data_object.dt * data_object.num_samples
+            else:
+                self.x_min = min(self.x_min, data_object.tmin)
+                self.x_max = max(self.x_max, data_object.tmin + data_object.dt * data_object.num_samples)
+            print(f'temp x_min: {self.x_min} - x_max: {self.x_max}')
         elif data_object.data_type == Data_Type.FREQ_SIGNAL:
             if self.x_min is None or self.x_max is None:
                 self.x_min = data_object.fmin
                 self.x_max = data_object.fmin + data_object.df * data_object.num_samples
+            else:
+                self.x_min = min(self.x_min, data_object.fmin)
+                self.x_max = max(self.x_max, data_object.fmin + data_object.df * data_object.num_samples)
+                print(f'Freq x_min: {self.x_min} - x_max: {self.x_max}')
+        elif data_object.data_type == Data_Type.FFTS:
+            if self.x_min is None or self.x_max is None:
+                # recuperer la premiere FFT des FFTS
+                fft_data_object = data_object.fft_signals[0]
+                self.x_min = fft_data_object.fmin
+                self.x_max = fft_data_object.fmin + fft_data_object.df * fft_data_object.num_samples
+            else:
+                # recuperer la premiere FFT des FFTS
+                fft_data_object = data_object.fft_signals[0]
+                self.x_min = min(self.x_min, fft_data_object.fmin)
+                self.x_max = max(self.x_max, fft_data_object.fmin + fft_data_object.df * fft_data_object.num_samples)
+                print(f'FFT x_min: {self.x_min} - x_max: {self.x_max}')
 
         # Si c'est la première courbe, créer un ViewBox séparé pour elle
         if len(self.curves) == 0:
@@ -103,24 +121,24 @@ class SignalPlotWidget(QWidget):
             # Ajouter un axe Y à droite pour la première courbe
             #cacher l'axe Y par défaut
             self.plot_widget.plotItem.hideAxis('right')
-
             axis = pg.AxisItem('right')
             self.plot_widget.plotItem.layout.addItem(axis, 2, 3)  # Placer à droite du graphique
             axis.linkToView(viewbox)  # Lier l'axe Y au ViewBox
             axis.setLabel(data_object.data_name, color=color)
             # axis.setPen(pg.mkPen(color))
             axis.setGrid(150)
-
+            #definir le min et maximum de l'axe X pour le graphique
+            viewbox.setLimits(xMin=self.x_min, xMax=self.x_max)
             # Ajouter la courbe au ViewBox séparé
             curve = pg.PlotCurveItem(pen=pg.mkPen(color))
             viewbox.addItem(curve)
 
             # Désactiver l'auto-scaling du ViewBox principal (pour la première courbe)
             self.plot_widget.getViewBox().enableAutoRange(False, y=False)
-            self.plot_widget.getViewBox().setYRange(-10, 10)  # Fixer des limites manuelles de l'axe Y si nécessaire
+            # self.plot_widget.getViewBox().setYRange(-10, 10)  # Fixer des limites manuelles de l'axe Y si nécessaire
 
-            # Stocker la courbe, l'axe et le ViewBox
-            self.extra_axes.append((axis, viewbox))
+            # # Stocker la courbe, l'axe et le ViewBox
+            # self.extra_axes.append((axis, viewbox))
         else:
             # Ajouter un axe Y supplémentaire à droite pour les courbes suivantes
             viewbox = pg.ViewBox()
@@ -129,30 +147,30 @@ class SignalPlotWidget(QWidget):
 
             # Créer un nouvel axe Y à droite pour la courbe supplémentaire
             axis = pg.AxisItem('right')
+            # axis.showLabel()
             self.plot_widget.plotItem.layout.addItem(axis, 2, 3 + len(self.extra_axes))  # Ajouter l'axe à droite
             axis.linkToView(viewbox)  # Lier l'axe Y au ViewBox
             axis.setLabel(data_object.data_name, color=color)
-            # axis.setPen(pg.mkPen(color))
-            # axis.setGrid(255)
 
             # Ajouter la courbe au nouveau ViewBox
             curve = pg.PlotCurveItem(pen=pg.mkPen(color))
-            viewbox.addItem(curve)
+        # Check if this is FFT data
+        if data_object.data_type == Data_Type.FFTS:
+            print(f"FFT data detected: {data_object.data_name}")
+            curve,axis = self.setup_fft_animation(data_object, color)
+            axis.setLabel(data_object.data_name, color=color)
+            axis.linkToView(viewbox)  # Lier l'axe Y au ViewBox
+            axis = pg.AxisItem('right')
+        viewbox.addItem(curve)
 
-            # Stocker l'axe et le ViewBox pour les courbes supplémentaires
-            self.extra_axes.append((axis, viewbox))
+        # Stocker l'axe et le ViewBox pour les courbes supplémentaires
+        self.extra_axes.append((axis, viewbox))
 
+        # return # FFT data handled, no further processing
         # Ajouter la courbe à la liste des courbes tracées
+
         self.curves[data_id] = curve
         # self.legend.addItem(curve, name=data_object.data_name)
-
-        # Mettre à jour les limites en fonction de la nouvelle courbe
-        if data_object.data_type == Data_Type.TEMPORAL_SIGNAL:
-            self.x_min = min(self.x_min, data_object.tmin)
-            self.x_max = max(self.x_max, data_object.tmin + data_object.dt * data_object.num_samples)
-        elif data_object.data_type == Data_Type.FREQ_SIGNAL:
-            self.x_min = min(self.x_min, data_object.fmin)
-            self.x_max = max(self.x_max, data_object.fmin + data_object.df * data_object.num_samples)
 
         self.plot_widget.setLimits(xMin=self.x_min, xMax=self.x_max)
 
@@ -184,31 +202,37 @@ class SignalPlotWidget(QWidget):
                 # changer la couleur de la courbe
                 self.change_curve_color(dataid, label, colorbutton, rgb_color=color)
 
-    def add_curve_with_extra_axis(self, curve, label, color):
-        """ Ajouter une courbe avec son propre axe Y à droite. """
-        viewbox = pg.ViewBox()
-        self.plot_widget.scene().addItem(viewbox)
-        viewbox.setXLink(self.plot_widget.plotItem.vb)  # Lier l'axe X avec le ViewBox principal
-
-        # Créer un nouvel axe Y à droite
-        axis = pg.AxisItem('right')
-        self.plot_widget.plotItem.layout.addItem(axis, 2, 3 + len(self.extra_axes))  # Ajouter l'axe à droite
-        axis.linkToView(viewbox)  # Lier l'axe Y au ViewBox
-        axis.setLabel(label, color=color)
-        # axis.setPen(pg.mkPen(color))
-        #afficher la grille
-        # axis.setGrid(255)
-
-        # Ajouter la courbe au nouveau ViewBox (lié au nouvel axe Y)
-        viewbox.addItem(curve)
-        self.extra_axes.append((axis, viewbox))
-
-        # S'assurer que les ViewBox sont bien synchronisés avec la taille du graphique
-        self.update_viewbox_geometry()
+    # def add_curve_with_extra_axis(self, curve, label, color):
+    #     """ Ajouter une courbe avec son propre axe Y à droite. """
+    #     viewbox = pg.ViewBox()
+    #     self.plot_widget.scene().addItem(viewbox)
+    #     viewbox.setXLink(self.plot_widget.plotItem.vb)  # Lier l'axe X avec le ViewBox principal
+    #
+    #     # Créer un nouvel axe Y à droite
+    #     axis = pg.AxisItem('right')
+    #     self.plot_widget.plotItem.layout.addItem(axis, 2, 3 + len(self.extra_axes))  # Ajouter l'axe à droite
+    #     axis.linkToView(viewbox)  # Lier l'axe Y au ViewBox
+    #     axis.setLabel(label, color=color)
+    #     # axis.setPen(pg.mkPen(color))
+    #     #afficher la grille
+    #     # axis.setGrid(255)
+    #
+    #     # Ajouter la courbe au nouveau ViewBox (lié au nouvel axe Y)
+    #     viewbox.addItem(curve)
+    #     self.extra_axes.append((axis, viewbox))
+    #
+    #     # S'assurer que les ViewBox sont bien synchronisés avec la taille du graphique
+    #     self.update_viewbox_geometry()
 
     def display_signal(self, data_id, curve=None):
         """ Afficher les données pour un data_id spécifique """
+
         data_object = self.data_pool.get_data_info(data_id)['data_object'].iloc[0]
+        print(f"Displaying data for {data_object.data_name}, type: {data_object.data_type},data_id: {data_id},data_object: {data_object}")
+        if data_object.data_type == Data_Type.FFTS:
+            self.curves[data_id] = self.fft_curve
+            self.display_fft_frame(0)
+            return
         num_samples = data_object.num_samples
         dt = data_object.dt if data_object.data_type == Data_Type.TEMPORAL_SIGNAL else data_object.df
         chunk_size = max(1, num_samples // self.max_points)
@@ -236,77 +260,31 @@ class SignalPlotWidget(QWidget):
         else:
             self.curves[data_id].setData(x_data, y_data)
 
-    def handle_zoom(self, _, range):
-        """ Ajuster l'affichage du zoom. """
-        x_min, x_max = range
-        if x_min < self.x_min:
-            x_min = self.x_min
-        if x_max > self.x_max:
-            x_max = self.x_max
-        for data_id, curve in self.curves.items():
-            self.display_signal(data_id, curve)
+    def setup_fft_animation(self, fft_data, color):
+        """Setup the plot and slider for FFT animation."""
+        self.fft_data = fft_data  # Store FFT data for playback
+        self.timestamp_slider.setMaximum(len(fft_data.fft_signals) - 1)
+        self.timestamp_slider.setValue(0)
+        self.current_frame = 0
+        self.is_animating = False
 
-    def update_viewbox_geometry(self):
-        """ S'assurer que tous les ViewBox sont synchronisés avec la géométrie du graphique principal. """
-        for _, viewbox in self.extra_axes:
-            viewbox.setGeometry(self.plot_widget.plotItem.vb.sceneBoundingRect())
-            viewbox.linkedViewChanged(self.plot_widget.plotItem.vb, viewbox.XAxis)
+        # Create a curve for FFT data
+        self.fft_curve = self.plot_widget.plot(pen=pg.mkPen(color))
+        #recuperer l'axe Y
+        axis = self.plot_widget.getAxis('right')
+        # self.fft_curve = pg.PlotCurveItem(pen=pg.mkPen(color))
+        self.curves[fft_data.data_id] = self.fft_curve
 
-    def set_selection_style(self, is_selected):
-        """ Appliquer un style visuel pour la sélection. """
-        self.plot_widget.setBackground('lightgray' if is_selected else 'w')
+        #afficher le player controler
+        self.animation_controls.setVisible(True)
 
-    def on_plot_clicked(self, event):
-        """ Gestion de l'événement de clic pour la sélection du graphique. """
-        if self.plot_widget.sceneBoundingRect().contains(event.scenePos()):
-            if not self.selected:
-                self.select()
-            else:
-                self.deselect()
+        # Display the first frame
+        self.display_fft_frame(0)
+        return self.fft_curve,axis
 
-    def select(self):
-        self.selected = True
-        self.set_selection_style(True)
-
-    def deselect(self):
-        self.selected = False
-        self.set_selection_style(False)
-
-    def remove_data(self, data_id):
-        """ Supprimer une courbe spécifique du graphique. """
-        if data_id in self.curves:
-            curve = self.curves.pop(data_id)
-            self.legend.removeItem(curve)
-            curve.clear()
-            print(f"Removed curve for data_id {data_id}")
-
-    def is_compatible(self, data_id):
-        """
-        Vérifier si la nouvelle donnée est compatible avec celles déjà affichées.
-        Si le graphique est vide, elle est toujours compatible.
-        """
-        if not self.curves:
-            return True
-
-        new_data_info = self.data_pool.get_data_info(data_id)
-        new_data_object = new_data_info['data_object'].iloc[0]
-        new_data_type = new_data_object.data_type
-        print(f"New data type: {new_data_type} - Current data type: {self.data_type}")
-        if new_data_type == self.data_type or self.data_type is None:
-            return True
-
-        if self.data_type == Data_Type.TEMPORAL_SIGNAL or self.data_type == Data_Type.TEMP_LIMITS:
-            if new_data_type == Data_Type.TEMPORAL_SIGNAL or new_data_type == Data_Type.TEMP_LIMITS:
-                return True
-        elif self.data_type == Data_Type.FREQ_SIGNAL or self.data_type == Data_Type.FREQ_LIMITS:
-            if new_data_type == Data_Type.FREQ_SIGNAL or new_data_type == Data_Type.FREQ_LIMITS:
-                return True
-
-        return False
-
-    def init_animation_controls(self, layout):
+    def init_animation_controls(self, parent_widget):
         """ Initialize animation playback controls for FFT data. """
-        control_layout = QHBoxLayout()
+        control_layout = QHBoxLayout(parent_widget)
 
         # Play button
         self.play_button = QPushButton("Play")
@@ -333,27 +311,9 @@ class SignalPlotWidget(QWidget):
         self.frame_label = QLabel("Frame: 0")
         control_layout.addWidget(self.frame_label)
 
-        layout.addLayout(control_layout)
-
-    def setup_fft_animation(self, fft_data, color):
-        """Setup the plot and slider for FFT animation."""
-        self.fft_data = fft_data  # Store FFT data for playback
-        self.timestamp_slider.setMaximum(len(fft_data.fft_signals) - 1)
-        self.timestamp_slider.setValue(0)
-        self.current_frame = 0
-        self.is_animating = False
-
-        # Create a curve for FFT data
-        self.fft_curve = self.plot_widget.plot(pen=pg.mkPen(color))
-        self.curves[fft_data.data_id] = self.fft_curve
-        self.legend.addItem(self.fft_curve, name=fft_data.data_name)
-
-        # Display the first frame
-        self.display_fft_frame(0)
-
     def display_fft_frame(self, frame_index):
         """Display a single FFT frame (frequency domain data) by index."""
-        fft_signal = self.fft_data.fft_signals[frame_index]
+        fft_signal: FreqSignalData = self.fft_data.fft_signals[frame_index]
         freq_range = np.linspace(fft_signal.fmin, fft_signal.fmin + fft_signal.df * fft_signal.num_samples,
                                  fft_signal.num_samples)
         self.fft_curve.setData(freq_range, fft_signal.data)
@@ -430,7 +390,6 @@ class SignalPlotWidget(QWidget):
             color_button.setStyleSheet(f"background-color: {hex_color};")
             self.curves[data_id].setPen(pg.mkPen(hex_color))
 
-
     def generate_color(self, index, num_curves):
         """
         Génère une couleur unique en fonction de l'index et du nombre de courbes.
@@ -441,3 +400,71 @@ class SignalPlotWidget(QWidget):
         hue = hue % 1.0  # Assurer que la teinte est dans [0, 1]
         rgb = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
         return pg.mkColor(int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255))
+
+    def handle_zoom(self, _, range):
+        """ Ajuster l'affichage du zoom. """
+        x_min, x_max = range
+        if x_min < self.x_min:
+            x_min = self.x_min
+        if x_max > self.x_max:
+            x_max = self.x_max
+        for data_id, curve in self.curves.items():
+            self.display_signal(data_id, curve)
+
+    def update_viewbox_geometry(self):
+        """ S'assurer que tous les ViewBox sont synchronisés avec la géométrie du graphique principal. """
+        for _, viewbox in self.extra_axes:
+            viewbox.setGeometry(self.plot_widget.plotItem.vb.sceneBoundingRect())
+            viewbox.linkedViewChanged(self.plot_widget.plotItem.vb, viewbox.XAxis)
+
+    def set_selection_style(self, is_selected):
+        """ Appliquer un style visuel pour la sélection. """
+        self.plot_widget.setBackground('lightgray' if is_selected else 'w')
+
+    def on_plot_clicked(self, event):
+        """ Gestion de l'événement de clic pour la sélection du graphique. """
+        if self.plot_widget.sceneBoundingRect().contains(event.scenePos()):
+            if not self.selected:
+                self.select()
+            else:
+                self.deselect()
+
+    def select(self):
+        self.selected = True
+        self.set_selection_style(True)
+
+    def deselect(self):
+        self.selected = False
+        self.set_selection_style(False)
+
+    def remove_data(self, data_id):
+        """ Supprimer une courbe spécifique du graphique. """
+        if data_id in self.curves:
+            curve = self.curves.pop(data_id)
+            self.legend.removeItem(curve)
+            curve.clear()
+            print(f"Removed curve for data_id {data_id}")
+
+    def is_compatible(self, data_id):
+        """
+        Vérifier si la nouvelle donnée est compatible avec celles déjà affichées.
+        Si le graphique est vide, elle est toujours compatible.
+        """
+        if not self.curves:
+            return True
+
+        new_data_info = self.data_pool.get_data_info(data_id)
+        new_data_object = new_data_info['data_object'].iloc[0]
+        new_data_type = new_data_object.data_type
+        print(f"New data type: {new_data_type} - Current data type: {self.data_type}")
+        if new_data_type == self.data_type or self.data_type is None:
+            return True
+
+        if self.data_type == Data_Type.TEMPORAL_SIGNAL or self.data_type == Data_Type.TEMP_LIMITS:
+            if new_data_type == Data_Type.TEMPORAL_SIGNAL or new_data_type == Data_Type.TEMP_LIMITS:
+                return True
+        elif self.data_type == Data_Type.FREQ_SIGNAL or self.data_type == Data_Type.FREQ_LIMITS:
+            if new_data_type == Data_Type.FREQ_SIGNAL or new_data_type == Data_Type.FREQ_LIMITS:
+                return True
+
+        return False
