@@ -78,7 +78,7 @@ class SignalPlotWidget(QWidget):
         is_limit = False
 
         # Déterminer si la donnée est une limite
-        if data_object.data_type in (Data_Type.TEMP_LIMITS, Data_Type.FREQ_LIMITS):
+        if data_object.data_type in (Data_Type.TEMP_LIMIT, Data_Type.FREQ_LIMIT):
             is_limit = True
 
         # Initialisation des x_min et x_max pour le graphique selon le type de signal
@@ -111,6 +111,20 @@ class SignalPlotWidget(QWidget):
                 self.x_min = min(self.x_min, fft_data_object.fmin)
                 self.x_max = max(self.x_max, fft_data_object.fmin + fft_data_object.df * fft_data_object.num_samples)
                 print(f'FFT x_min: {self.x_min} - x_max: {self.x_max}')
+        elif data_object.data_type == Data_Type.FREQ_LIMIT:
+            if self.x_min is None or self.x_max is None:
+                self.x_min = data_object.freq_min
+                self.x_max = data_object.freq_max
+            else:
+                self.x_min = min(self.x_min, data_object.freq_min)
+                self.x_max = max(self.x_max, data_object.freq_max)
+            print(f'Freq limit x_min: {self.x_min} - x_max: {self.x_max}')
+        elif data_object.data_type == Data_Type.TEMP_LIMIT:
+            if self.x_min is None or self.x_max is None:
+                #recupérer le xmin et xmax du plot
+                self.x_min = self.plot_widget.plotItem.vb.viewRange()[0][0]
+                self.x_max = self.plot_widget.plotItem.vb.viewRange()[0][1]
+            print(f'Temp limit x_min: {self.x_min} - x_max: {self.x_max}')
 
         # Si c'est la première courbe, créer un ViewBox séparé pour elle
         if len(self.curves) == 0:
@@ -136,6 +150,7 @@ class SignalPlotWidget(QWidget):
 
             # Désactiver l'auto-scaling du ViewBox principal (pour la première courbe)
             self.plot_widget.getViewBox().enableAutoRange(False, y=False)
+            self.plot_widget.plotItem.setXRange(self.x_min, self.x_max)
             # self.plot_widget.getViewBox().setYRange(-10, 10)  # Fixer des limites manuelles de l'axe Y si nécessaire
 
             # # Stocker la courbe, l'axe et le ViewBox
@@ -152,6 +167,7 @@ class SignalPlotWidget(QWidget):
             self.plot_widget.plotItem.layout.addItem(axis, 2, 3 + len(self.extra_axes))  # Ajouter l'axe à droite
             axis.linkToView(viewbox)  # Lier l'axe Y au ViewBox
             axis.setLabel(data_object.data_name, color=color)
+            self.plot_widget.plotItem.setXRange(self.x_min, self.x_max)
 
             # Ajouter la courbe au nouveau ViewBox
             curve = pg.PlotCurveItem(pen=pg.mkPen(color))
@@ -191,7 +207,7 @@ class SignalPlotWidget(QWidget):
             datacurve = self.data_pool.get_data_info(dataid)['data_object'].iloc[0]
             datatype = datacurve.data_type
             # si la data est une limite alors on change la couleur en rouge
-            if datatype in (Data_Type.TEMP_LIMITS, Data_Type.FREQ_LIMITS):
+            if datatype in (Data_Type.TEMP_LIMIT, Data_Type.FREQ_LIMIT):
                 color = 'r'
             else:
                 # couleur en fonction de l'index de la courbe
@@ -213,6 +229,33 @@ class SignalPlotWidget(QWidget):
             self.curves[data_id] = self.fft_curve
             self.display_fft_frame(0)
             return
+        elif data_object.data_type == Data_Type.FREQ_LIMIT:
+            # Special handling for frequency limits
+            x_data = np.linspace(self.x_min, self.x_max, self.max_points)
+            y_data = [data_object.interpolate(freq) for freq in x_data]  # Interpolate limit level at each frequency
+
+            # Use a dashed line or specific color for frequency limits
+            if curve:
+                curve.setData(x_data, y_data, pen=pg.mkPen('r', style=pg.QtCore.Qt.DashLine))
+            else:
+                limit_curve = pg.PlotCurveItem(x_data, y_data, pen=pg.mkPen('r', style=pg.QtCore.Qt.DashLine))
+                self.curves[data_id] = limit_curve
+                self.plot_widget.addItem(limit_curve)
+            return
+        elif data_object.data_type == Data_Type.TEMP_LIMIT:
+            # Special handling for temporal limits
+            x_data = np.linspace(self.x_min, self.x_max, self.max_points)
+            level = [level for level,transparency_time,release_time in data_object.data][0]
+            y_data = [level for t in x_data]  # Interpolate limit level at each frequency
+            print(f"x_data: {x_data} - y_data: {y_data}")
+            if curve:
+                curve.setData(x_data, y_data, pen=pg.mkPen('r', style=pg.QtCore.Qt.DashLine))
+            else:
+                limit_curve = pg.PlotCurveItem(x_data, y_data, pen=pg.mkPen('r', style=pg.QtCore.Qt.DashLine))
+                self.curves[data_id] = limit_curve
+                self.plot_widget.addItem(limit_curve)
+            return
+
         num_samples = data_object.num_samples
         dt = data_object.dt if data_object.data_type == Data_Type.TEMPORAL_SIGNAL else data_object.df
         chunk_size = max(1, num_samples // self.max_points)
@@ -440,53 +483,15 @@ class SignalPlotWidget(QWidget):
         if new_data_type == self.data_type or self.data_type is None:
             return True
 
-        if self.data_type == Data_Type.TEMPORAL_SIGNAL or self.data_type == Data_Type.TEMP_LIMITS:
-            if new_data_type == Data_Type.TEMPORAL_SIGNAL or new_data_type == Data_Type.TEMP_LIMITS:
+        if self.data_type == Data_Type.TEMPORAL_SIGNAL or self.data_type == Data_Type.TEMP_LIMIT:
+            if new_data_type == Data_Type.TEMPORAL_SIGNAL or new_data_type == Data_Type.TEMP_LIMIT:
                 return True
-        elif self.data_type == Data_Type.FREQ_SIGNAL or self.data_type == Data_Type.FREQ_LIMITS:
-            if new_data_type == Data_Type.FREQ_SIGNAL or new_data_type == Data_Type.FREQ_LIMITS:
+        elif self.data_type == Data_Type.FREQ_SIGNAL or self.data_type == Data_Type.FREQ_LIMIT:
+            if new_data_type == Data_Type.FREQ_SIGNAL or new_data_type == Data_Type.FREQ_LIMIT:
                 return True
 
         return False
 
-    # def toggle_y_axis_grouping(self, group_y_axes=True):
-    #     """
-    #     Active ou désactive le regroupement des axes Y en un seul axe partagé.
-    #     """
-    #     if group_y_axes:
-    #         # Activer un axe Y unique pour toutes les courbes
-    #         self.plot_widget.plotItem.hideAxis('right')  # Cache tous les axes individuels
-    #         if not hasattr(self, 'shared_axis'):
-    #             # Ajouter un seul axe Y partagé si non existant
-    #             self.shared_axis = pg.AxisItem('right')
-    #             self.shared_axis.setGrid(150)
-    #             #masquer tous les axes Y de extra_axes
-    #             for axis, _ in self.extra_axes:
-    #                 axis.hide()
-    #             #ajouter l'axe partagé
-    #             self.extra_axes.append(self.shared_axis)
-    #             #ajouter l'axe partagé au layout
-    #             self.plot_widget.plotItem.layout.addItem(self.shared_axis, 2, 3 + len(self.extra_axes))
-    #             #lier l'axe partagé a tous les autres axes
-    #             for _, viewbox in self.extra_axes:
-    #                 self.shared_axis.linkToView(viewbox)
-    #             # self.shared_axis.linkToView(self.plot_widget.plotItem.vb)
-    #         # Déplacer toutes les courbes sur le même ViewBox
-    #         for curve in self.curves.values():
-    #             self.plot_widget.plotItem.vb.addItem(curve)
-    #     else:
-    #         # Désactiver l'axe Y unique et rétablir les axes individuels
-    #         if hasattr(self, 'shared_axis'):
-    #             self.plot_widget.plotItem.layout.removeItem(self.shared_axis)
-    #             del self.shared_axis
-    #         #retirer l'axe partagé de extra_axes
-    #         self.extra_axes.remove(self.shared_axis)
-    #         # Rétablir les axes individuels pour chaque courbe
-    #         for i, (axis, viewbox) in enumerate(self.extra_axes):
-    #             #montrer les axes Y
-    #             axis.show()
-    #             # self.plot_widget.plotItem.layout.addItem(axis, 2, 3 + i)
-    #             axis.linkToView(viewbox)
     def toggle_y_axis_grouping(self):
         """
         Active ou désactive l'affichage d'un axe Y partagé, sans modifier les ViewBoxes.

@@ -46,10 +46,10 @@ class PlotController(QWidget):
         """
         Active ou désactive le regroupement des axes Y pour le plot sélectionné.
         """
-        selected_plots : SignalPlotWidget = [plot for plot in self.plots if plot.selected]
+        selected_plots: SignalPlotWidget = [plot for plot in self.plots if plot.selected]
 
         if selected_plots:
-            for selected_plot in  selected_plots:
+            for selected_plot in selected_plots:
                 selected_plot.toggle_y_axis_grouping()
             print(f"Toggled Y-axis grouping for the selected plot. axes grouped: {selected_plot.y_axis_grouped}")
         else:
@@ -137,7 +137,7 @@ class PlotController(QWidget):
             data_info = self.data_pool.get_data_info(data_id)
             data_object = data_info['data_object'].iloc[0]
             data_type = data_object.data_type
-            selected_plot : SignalPlotWidget
+            selected_plot: SignalPlotWidget
             if data_type in [Data_Type.TEMPORAL_SIGNAL, Data_Type.FREQ_SIGNAL]:
                 # Regular temporal or frequency data addition
                 if selected_plot.is_compatible(data_id):
@@ -146,13 +146,13 @@ class PlotController(QWidget):
                 else:
                     print("Incompatible data for selected plot.")
 
-            elif data_type == Data_Type.FFTS:
+            elif data_type in [Data_Type.FFTS, Data_Type.FREQ_LIMIT, Data_Type.TEMP_LIMIT]:
                 # Trigger FFT playback setup if FFT data is selected
                 # selected_plot.setup_fft_animation(data_object, 'b')
                 selected_plot.add_data(data_id, 'b')
                 print(f"FFT data {data_id} added with playback controls.")
 
             else:
-                print(f"Data type {data_type} not supported for plotting.")
+                print(f"Data type {data_type} not supported for ploting.")
         else:
             print("No plot selected to add data to.")

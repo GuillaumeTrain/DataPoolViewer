@@ -51,7 +51,7 @@ class DatapoolVisualizer(QWidget):
             data_type = data_info['data_object'].iloc[0].data_type
 
             # Route temporal, frequency, or FFT data types to PlotController
-            if data_type in [Data_Type.TEMPORAL_SIGNAL, Data_Type.FREQ_SIGNAL, Data_Type.FFTS]:
+            if data_type in [Data_Type.TEMPORAL_SIGNAL, Data_Type.FREQ_SIGNAL, Data_Type.FFTS, Data_Type.FREQ_LIMIT,data_type.TEMP_LIMIT]:
                 self.plot_controller.add_data_to_selected_plot(data_id)
             else:
                 print(f"Data type {data_type} is not supported for plotting.")
