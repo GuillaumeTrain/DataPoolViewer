@@ -70,18 +70,19 @@ Here is a code snippet showing how to visualize a stored signal in a DataPool an
 
 ```python
 from PySide6.QtWidgets import QApplication, QMainWindow, QDockWidget
-from dataviewer.plot_widget import SignalPlotWidget
+from src.dataviewer.plot_widget import SignalPlotWidget
 import numpy as np
 from scipy import signal
 from PyDataCore import DataPool, Data_Type
 from PySide6.QtCore import Qt
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         # Init the DataPool and register the square signal
         self.datapool = DataPool()
-        
+
         # Square wave signal parameters
         sampling_interval = 0.0001
         duration = 50  # Duration in seconds
@@ -94,11 +95,10 @@ class MainWindow(QMainWindow):
         tstep = t[1] - t[0]
         square_signal = signal.square(2 * np.pi * frequency * t, duty=duty_cycle)
 
-
         # déclarer le signal carré dans le DataPool
         temporal_data_id = self.datapool.register_data(Data_Type.TEMPORAL_SIGNAL, "Square Signal 5Hz", "source1", False,
                                                        False, time_step=tstep, unit="V")
-        #stocker le signal carré dans le DataPool
+        # stocker le signal carré dans le DataPool
         self.datapool.store_data(temporal_data_id, square_signal, "source1")
 
         # Display the widget
@@ -106,6 +106,7 @@ class MainWindow(QMainWindow):
         signal_plot_widget = SignalPlotWidget(self.datapool, temporal_data_id)
         dock_widget.setWidget(signal_plot_widget)
         self.addDockWidget(Qt.RightDockWidgetArea, dock_widget)
+
 
 if __name__ == "__main__":
     app = QApplication([])

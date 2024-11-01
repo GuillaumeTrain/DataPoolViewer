@@ -245,7 +245,7 @@ class SignalPlotWidget(QWidget):
         elif data_object.data_type == Data_Type.TEMP_LIMIT:
             # Special handling for temporal limits
             x_data = np.linspace(self.x_min, self.x_max, self.max_points)
-            level = [level for level,transparency_time,release_time in data_object.data][0]
+            level = [level for level, transparency_time, release_time in data_object.data][0]
             y_data = [level for t in x_data]  # Interpolate limit level at each frequency
             print(f"x_data: {x_data} - y_data: {y_data}")
             if curve:
@@ -257,19 +257,25 @@ class SignalPlotWidget(QWidget):
             return
 
         num_samples = data_object.num_samples
-        dt = data_object.dt if data_object.data_type == Data_Type.TEMPORAL_SIGNAL else data_object.df
-        chunk_size = max(1, num_samples // self.max_points)
+        print(f"Number of samples: {num_samples}")
+        resolution = data_object.dt if data_object.data_type == Data_Type.TEMPORAL_SIGNAL else data_object.df
+        chunk_size = max(1, int((self.x_max-self.x_min)/resolution) // self.max_points)
 
         x_data, y_data_min, y_data_max = [], [], []
-
-        for chunk_start in range(0, num_samples, chunk_size):
+        print(f"Chunk size: {chunk_size} , max points: {self.max_points}")
+        y = 0
+        start_chunk_number = int(self.x_min / (resolution*chunk_size))
+        print(f"Start chunk number: {start_chunk_number}")
+        for chunk_start in range(start_chunk_number, self.max_points):
             chunk_end = min(chunk_start + chunk_size, num_samples)
             chunk = self.data_pool.get_data_chunk(data_id, chunk_start, chunk_size=chunk_size)
-
+            print(f"i = {y} ,chunk_start: {chunk_start} , Chunk: {chunk}")
+            y = y + 1
             if len(chunk) == 0:
                 continue
 
-            x_value = chunk_start * dt
+
+            x_value = chunk_start * resolution*chunk_size
             x_data.append(x_value)
             y_data_min.append(np.min(chunk))
             y_data_max.append(np.max(chunk))
@@ -278,6 +284,7 @@ class SignalPlotWidget(QWidget):
         x_data = np.repeat(x_data, 2)
         y_data = np.empty_like(x_data)
         y_data[0::2], y_data[1::2] = y_data_min, y_data_max
+        print(f"X data: {x_data} - Y data: {y_data}")
         if curve:
             curve.setData(x_data, y_data)
         else:
@@ -427,10 +434,8 @@ class SignalPlotWidget(QWidget):
     def handle_zoom(self, _, range):
         """ Ajuster l'affichage du zoom. """
         x_min, x_max = range
-        if x_min < self.x_min:
-            x_min = self.x_min
-        if x_max > self.x_max:
-            x_max = self.x_max
+        self.x_min = x_min
+        self.x_max = x_max
         for data_id, curve in self.curves.items():
             self.display_signal(data_id, curve)
 

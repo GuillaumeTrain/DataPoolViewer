@@ -1,7 +1,7 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QSplitter
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QSplitter
 from PyDataCore import Data_Type
-from dataviewer.plot_controler import PlotController
-from dataviewer.datapool_viewer import DataPoolViewerWidget
+from src.DatapoolVisualizer.plot_controler import PlotController
+from src.DatapoolVisualizer.datapool_viewer import DataPoolViewerWidget
 
 
 class DatapoolVisualizer(QWidget):

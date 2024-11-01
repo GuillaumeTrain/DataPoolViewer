@@ -3,7 +3,7 @@ from PyDataCore import DataPool, Data_Type
 from PySide6.QtGui import Qt
 from scipy import signal
 from PySide6.QtWidgets import QApplication, QMainWindow, QDockWidget
-from dataviewer.plot_widget import SignalPlotWidget
+from src.DatapoolVisualizer.plot_widget import SignalPlotWidget
 
 
 class MainWindow(QMainWindow):
@@ -11,7 +11,7 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         # Paramètres pour le signal carré
-        sampling_interval = 0.000001  # Intervalle d'échantillonnage de "sampling_interval" secondes
+        sampling_interval = 0.0000001  # Intervalle d'échantillonnage de "sampling_interval" secondes
         duration = 6  # Durée de "duration" secondes
         frequency = 1  # Fréquence de "frequency" Hz
         duty_cycle = 0.999  # Duty cycle de "duty_cycle" %
@@ -24,10 +24,12 @@ class MainWindow(QMainWindow):
 
         # Créer le widget de tracé pour visualiser le signal carré
         datapool = DataPool()
-        data_id = datapool.register_data(Data_Type.TEMPORAL_SIGNAL, "square_signal", "source", False, False,
-                                         time_step=sampling_interval, unit="V")
-        datapool.store_data(data_id, square_signal, "source", "./")
+        temporal_data_id = datapool.register_data(Data_Type.TEMPORAL_SIGNAL, "Square Signal 5Hz", "source", False,
+                                                       False, time_step=sampling_interval, unit="V")
+        datapool.store_data(temporal_data_id, square_signal, "source")
+        datapool.unlock_data(temporal_data_id)
         signal_plot_widget = SignalPlotWidget(datapool, parent=self)
+        signal_plot_widget.add_data(temporal_data_id)
 
         # Créer un QDockWidget pour rendre le plot détachable
         self.create_dockable_view(signal_plot_widget)

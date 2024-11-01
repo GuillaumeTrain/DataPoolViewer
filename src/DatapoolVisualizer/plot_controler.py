@@ -1,7 +1,6 @@
-import pyqtgraph as pg
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton
 from PyDataCore import Data_Type
-from dataviewer.plot_widget import SignalPlotWidget
+from src.DatapoolVisualizer.plot_widget import SignalPlotWidget
 
 
 class PlotController(QWidget):

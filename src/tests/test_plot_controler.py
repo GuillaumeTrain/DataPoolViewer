@@ -1,9 +1,9 @@
 import numpy as np
 from PySide6.QtGui import Qt
-from PySide6.QtWidgets import QApplication, QMainWindow, QDockWidget, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QMainWindow, QDockWidget
 from PyDataCore import DataPool, Data_Type
 from scipy import signal
-from dataviewer.plot_controler import PlotController  # Importez votre classe PlotController ici
+from src.DatapoolVisualizer.plot_controler import PlotController  # Importez votre classe PlotController ici
 
 class MainWindow(QMainWindow):
     def __init__(self):

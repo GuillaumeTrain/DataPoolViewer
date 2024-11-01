@@ -3,8 +3,7 @@ from PySide6.QtWidgets import QApplication, QMainWindow
 from PyDataCore import DataPool, Data_Type
 from scipy import signal
 import numpy as np
-
-from dataviewer.datapool_visualizer import DatapoolVisualizer
+from src.DatapoolVisualizer.datapool_visualizer import DatapoolVisualizer
 
 
 class MainWindow(QMainWindow):
