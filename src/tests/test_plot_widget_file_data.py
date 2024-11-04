@@ -12,7 +12,7 @@ class MainWindow(QMainWindow):
 
         # Paramètres pour le signal carré
         sampling_interval = 0.000001  # Intervalle d'échantillonnage de "sampling_interval" secondes
-        duration = 60  # Durée de "duration" secondes
+        duration = 1000  # Durée de "duration" secondes
         frequency = 1  # Fréquence de "frequency" Hz
         duty_cycle = 0.999  # Duty cycle de "duty_cycle" %
 
@@ -24,7 +24,7 @@ class MainWindow(QMainWindow):
 
         # Créer le widget de tracé pour visualiser le signal carré
         datapool = DataPool()
-        data_id = datapool.register_data(Data_Type.TEMPORAL_SIGNAL, "square_signal", "source", False, False,
+        data_id = datapool.register_data(Data_Type.TEMPORAL_SIGNAL, "square_signal", "source", False, True,
                                          time_step=sampling_interval, unit="V")
         datapool.store_data(data_id, square_signal, "source", "./")
         signal_plot_widget = SignalPlotWidget(datapool, parent=self)

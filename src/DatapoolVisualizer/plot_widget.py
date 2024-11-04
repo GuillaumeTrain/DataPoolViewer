@@ -1,11 +1,12 @@
 import PyDataCore
 import numpy as np
-from PyDataCore import Data_Type, FreqSignalData, FFTSData
+from PyDataCore import Data_Type, FreqSignalData, FFTSData, TemporalSignalData
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QVBoxLayout, QWidget, QLabel, QSlider, QPushButton, QHBoxLayout, QColorDialog
 import pyqtgraph as pg
 from pyqtgraph import mkColor, mkPen, PlotItem, PlotCurveItem
+# from pyqtgraph.examples.hdf5 import curve
 from scipy.stats import alpha
 import colorsys
 
@@ -127,51 +128,27 @@ class SignalPlotWidget(QWidget):
                 self.x_max = self.plot_widget.plotItem.vb.viewRange()[0][1]
             print(f'Temp limit x_min: {self.x_min} - x_max: {self.x_max}')
 
-        # Si c'est la première courbe, créer un ViewBox séparé pour elle
+
         if len(self.curves) == 0:
-            # Créer un ViewBox séparé pour la première courbe
-            viewbox = pg.ViewBox()
-            self.plot_widget.scene().addItem(viewbox)
-            viewbox.setXLink(self.plot_widget.plotItem.vb)  # Lier l'axe X avec le ViewBox principal
-
-            # Ajouter un axe Y à droite pour la première courbe
-            # cacher l'axe Y par défaut
+            #cacher les axes Y
+            self.plot_widget.plotItem.hideAxis('left')
             self.plot_widget.plotItem.hideAxis('right')
-            axis = pg.AxisItem('right')
-            self.plot_widget.plotItem.layout.addItem(axis, 2, 3)  # Placer à droite du graphique
-            axis.linkToView(viewbox)  # Lier l'axe Y au ViewBox
-            axis.setLabel(data_object.data_name, color=color)
-            # axis.setPen(pg.mkPen(color))
-            axis.setGrid(150)
-            # definir le min et maximum de l'axe X pour le graphique
-            viewbox.setLimits(xMin=self.x_min, xMax=self.x_max)
-            # Ajouter la courbe au ViewBox séparé
-            curve = pg.PlotCurveItem(pen=pg.mkPen(color))
-            viewbox.addItem(curve)
+        # Ajouter un axe Y supplémentaire à droite pour les courbes suivantes
+        viewbox = pg.ViewBox()
+        self.plot_widget.scene().addItem(viewbox)
+        viewbox.setXLink(self.plot_widget.plotItem.vb)  # Lier l'axe X avec le ViewBox principal
 
-            # Désactiver l'auto-scaling du ViewBox principal (pour la première courbe)
-            self.plot_widget.getViewBox().enableAutoRange(False, y=False)
-            self.plot_widget.plotItem.setXRange(self.x_min, self.x_max)
-            # self.plot_widget.getViewBox().setYRange(-10, 10)  # Fixer des limites manuelles de l'axe Y si nécessaire
 
-            # # Stocker la courbe, l'axe et le ViewBox
-            # self.extra_axes.append((axis, viewbox))
-        else:
-            # Ajouter un axe Y supplémentaire à droite pour les courbes suivantes
-            viewbox = pg.ViewBox()
-            self.plot_widget.scene().addItem(viewbox)
-            viewbox.setXLink(self.plot_widget.plotItem.vb)  # Lier l'axe X avec le ViewBox principal
+        # Créer un nouvel axe Y à droite pour la courbe supplémentaire
+        axis = pg.AxisItem('right')
+        # axis.showLabel()
+        self.plot_widget.plotItem.layout.addItem(axis, 2, 3 + len(self.extra_axes))  # Ajouter l'axe à droite
+        axis.linkToView(viewbox)  # Lier l'axe Y au ViewBox
+        axis.setLabel(data_object.data_name, color=color)
+        self.plot_widget.plotItem.setXRange(self.x_min, self.x_max)
 
-            # Créer un nouvel axe Y à droite pour la courbe supplémentaire
-            axis = pg.AxisItem('right')
-            # axis.showLabel()
-            self.plot_widget.plotItem.layout.addItem(axis, 2, 3 + len(self.extra_axes))  # Ajouter l'axe à droite
-            axis.linkToView(viewbox)  # Lier l'axe Y au ViewBox
-            axis.setLabel(data_object.data_name, color=color)
-            self.plot_widget.plotItem.setXRange(self.x_min, self.x_max)
-
-            # Ajouter la courbe au nouveau ViewBox
-            curve = pg.PlotCurveItem(pen=pg.mkPen(color))
+        # Ajouter la courbe au nouveau ViewBox
+        curve = pg.PlotCurveItem(pen=pg.mkPen(color))
         # Check if this is FFT data
         if data_object.data_type == Data_Type.FFTS:
             print(f"FFT data detected: {data_object.data_name}")
@@ -222,16 +199,8 @@ class SignalPlotWidget(QWidget):
 
     def display_signal(self, data_id, curve=None):
         """ Afficher les données pour un data_id spécifique """
-
         data_object = self.data_pool.get_data_info(data_id)['data_object'].iloc[0]
-        data_x_min = data_object.tmin if data_object.data_type in Data_Type.TEMPORAL_SIGNAL else data_object.fmin
-        data_x_max = data_x_min + data_object.dt * data_object.num_samples if data_object.data_type in Data_Type.TEMPORAL_SIGNAL else data_x_min + data_object.df * data_object.num_samples
-        plot_x_min, plot_x_max = curve.getViewBox().viewRange()[0][0], curve.getViewBox().viewRange()[0][1]
-        # Calculate chunk size based on the zoomed range to limit to `max_points`
-        visible_range = plot_x_max - plot_x_min
-        curve: PlotCurveItem
-        print(
-            f"Displaying data for {data_object.data_name}, type: {data_object.data_type},data_id: {data_id},data_object: {data_object}")
+
         if data_object.data_type == Data_Type.FFTS:
             self.curves[data_id] = self.fft_curve
             self.display_fft_frame(0)
@@ -262,6 +231,16 @@ class SignalPlotWidget(QWidget):
                 self.curves[data_id] = limit_curve
                 self.plot_widget.addItem(limit_curve)
             return
+
+        data_x_min = data_object.tmin if data_object.data_type is Data_Type.TEMPORAL_SIGNAL else data_object.fmin
+        data_x_max = data_x_min + data_object.dt * data_object.num_samples if data_object.data_type is Data_Type.TEMPORAL_SIGNAL else data_x_min + data_object.df * data_object.num_samples
+        plot_x_min, plot_x_max = curve.getViewBox().viewRange()[0][0], curve.getViewBox().viewRange()[0][1]
+        # Calculate chunk size based on the zoomed range to limit to `max_points`
+        visible_range = plot_x_max - plot_x_min
+        curve: PlotCurveItem
+        print(
+            f"Displaying data for {data_object.data_name}, type: {data_object.data_type},data_id: {data_id},data_object: {data_object}")
+
 
         num_samples = data_object.num_samples
         resolution = data_object.dt if data_object.data_type == Data_Type.TEMPORAL_SIGNAL else data_object.df
