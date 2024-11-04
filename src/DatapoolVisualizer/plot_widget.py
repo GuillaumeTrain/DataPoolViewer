@@ -1,10 +1,11 @@
+import PyDataCore
 import numpy as np
 from PyDataCore import Data_Type, FreqSignalData, FFTSData
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QVBoxLayout, QWidget, QLabel, QSlider, QPushButton, QHBoxLayout, QColorDialog
 import pyqtgraph as pg
-from pyqtgraph import mkColor, mkPen, PlotItem
+from pyqtgraph import mkColor, mkPen, PlotItem, PlotCurveItem
 from scipy.stats import alpha
 import colorsys
 
@@ -121,7 +122,7 @@ class SignalPlotWidget(QWidget):
             print(f'Freq limit x_min: {self.x_min} - x_max: {self.x_max}')
         elif data_object.data_type == Data_Type.TEMP_LIMIT:
             if self.x_min is None or self.x_max is None:
-                #recupérer le xmin et xmax du plot
+                # recupérer le xmin et xmax du plot
                 self.x_min = self.plot_widget.plotItem.vb.viewRange()[0][0]
                 self.x_max = self.plot_widget.plotItem.vb.viewRange()[0][1]
             print(f'Temp limit x_min: {self.x_min} - x_max: {self.x_max}')
@@ -134,7 +135,7 @@ class SignalPlotWidget(QWidget):
             viewbox.setXLink(self.plot_widget.plotItem.vb)  # Lier l'axe X avec le ViewBox principal
 
             # Ajouter un axe Y à droite pour la première courbe
-            #cacher l'axe Y par défaut
+            # cacher l'axe Y par défaut
             self.plot_widget.plotItem.hideAxis('right')
             axis = pg.AxisItem('right')
             self.plot_widget.plotItem.layout.addItem(axis, 2, 3)  # Placer à droite du graphique
@@ -142,7 +143,7 @@ class SignalPlotWidget(QWidget):
             axis.setLabel(data_object.data_name, color=color)
             # axis.setPen(pg.mkPen(color))
             axis.setGrid(150)
-            #definir le min et maximum de l'axe X pour le graphique
+            # definir le min et maximum de l'axe X pour le graphique
             viewbox.setLimits(xMin=self.x_min, xMax=self.x_max)
             # Ajouter la courbe au ViewBox séparé
             curve = pg.PlotCurveItem(pen=pg.mkPen(color))
@@ -223,6 +224,12 @@ class SignalPlotWidget(QWidget):
         """ Afficher les données pour un data_id spécifique """
 
         data_object = self.data_pool.get_data_info(data_id)['data_object'].iloc[0]
+        data_x_min = data_object.tmin if data_object.data_type in Data_Type.TEMPORAL_SIGNAL else data_object.fmin
+        data_x_max = data_x_min + data_object.dt * data_object.num_samples if data_object.data_type in Data_Type.TEMPORAL_SIGNAL else data_x_min + data_object.df * data_object.num_samples
+        plot_x_min, plot_x_max = curve.getViewBox().viewRange()[0][0], curve.getViewBox().viewRange()[0][1]
+        # Calculate chunk size based on the zoomed range to limit to `max_points`
+        visible_range = plot_x_max - plot_x_min
+        curve: PlotCurveItem
         print(
             f"Displaying data for {data_object.data_name}, type: {data_object.data_type},data_id: {data_id},data_object: {data_object}")
         if data_object.data_type == Data_Type.FFTS:
@@ -257,34 +264,49 @@ class SignalPlotWidget(QWidget):
             return
 
         num_samples = data_object.num_samples
-        print(f"Number of samples: {num_samples}")
         resolution = data_object.dt if data_object.data_type == Data_Type.TEMPORAL_SIGNAL else data_object.df
-        chunk_size = max(1, int((self.x_max-self.x_min)/resolution) // self.max_points)
 
+
+        # visible_range = self.x_max - self.x_min
+        chunk_size = max(1, int(visible_range / resolution) // self.max_points)
+
+        print(f"Visible range: {visible_range}, Chunk size: {chunk_size}, Max points: {self.max_points}")
+
+        # Determine start and end chunk indices based on x_min and x_max
+        start_index = max(0, int(self.x_min / resolution))
+        end_index = min(num_samples, int(self.x_max / resolution))
+        visible_samples = end_index - start_index
+
+        # Adjust chunk size if visible_samples is less than max_points
+        if visible_samples < self.max_points:
+            chunk_size = 1
+
+        # Prepare arrays to store simplified x and y values
         x_data, y_data_min, y_data_max = [], [], []
-        print(f"Chunk size: {chunk_size} , max points: {self.max_points}")
-        y = 0
-        start_chunk_number = int(self.x_min / (resolution*chunk_size))
-        print(f"Start chunk number: {start_chunk_number}")
-        for chunk_start in range(start_chunk_number, self.max_points):
-            chunk_end = min(chunk_start + chunk_size, num_samples)
-            chunk = self.data_pool.get_data_chunk(data_id, chunk_start, chunk_size=chunk_size)
-            print(f"i = {y} ,chunk_start: {chunk_start} , Chunk: {chunk}")
-            y = y + 1
+
+        # Loop through data in chunks and simplify each chunk
+        for chunk_start in range(start_index, end_index, chunk_size):
+            chunk = self.data_pool.get_data_chunk(data_id, chunk_start // chunk_size, chunk_size=chunk_size)
+
             if len(chunk) == 0:
                 continue
 
+            # Min and max values within the chunk for simplification
+            min_value = np.min(chunk)
+            max_value = np.max(chunk)
 
-            x_value = chunk_start * resolution*chunk_size
+            # x_value for each chunk based on start index and resolution
+            x_value = chunk_start * resolution
             x_data.append(x_value)
-            y_data_min.append(np.min(chunk))
-            y_data_max.append(np.max(chunk))
+            y_data_min.append(min_value)
+            y_data_max.append(max_value)
 
-        # Affichage des points min/max
+        # Combine min and max for line drawing
         x_data = np.repeat(x_data, 2)
         y_data = np.empty_like(x_data)
         y_data[0::2], y_data[1::2] = y_data_min, y_data_max
-        print(f"X data: {x_data} - Y data: {y_data}")
+
+        # Update plot data
         if curve:
             curve.setData(x_data, y_data)
         else:
@@ -300,12 +322,12 @@ class SignalPlotWidget(QWidget):
 
         # Create a curve for FFT data
         self.fft_curve = self.plot_widget.plot(pen=pg.mkPen(color))
-        #recuperer l'axe Y
+        # recuperer l'axe Y
         axis = self.plot_widget.getAxis('right')
         # self.fft_curve = pg.PlotCurveItem(pen=pg.mkPen(color))
         self.curves[fft_data.data_id] = self.fft_curve
 
-        #afficher le player controler
+        # afficher le player controler
         self.animation_controls.setVisible(True)
 
         # Display the first frame
@@ -396,46 +418,19 @@ class SignalPlotWidget(QWidget):
         self.legend_layout.addWidget(label)
         self.legend_layout.addWidget(color_button)
 
-    def find_label_and_color_button_by_data_name(self, data_name):
-        """ Trouver l'élément de légende correspondant au nom de la donnée. """
-        for i in range(0, self.legend_layout.count(), 2):
-            label = self.legend_layout.itemAt(i).widget()
-            print(label.text())
-            if data_name in label.text():
-                # Trouver le bouton de couleur correspondant
-                color_button = self.legend_layout.itemAt(i + 1).widget()
-                return label, color_button
-
-    def change_curve_color(self, data_id, label, color_button=None, rgb_color=None):
-        """ Permet de changer la couleur de la courbe en cliquant sur l'élément de légende. """
-        color = None
-        if rgb_color:
-            color = QColor(rgb_color)
-        elif color_button:
-            color = QColorDialog.getColor()
-
-        if color.isValid():
-            hex_color = color.name()
-            label.setStyleSheet(f"font-weight: bold;")
-            color_button.setStyleSheet(f"background-color: {hex_color};")
-            self.curves[data_id].setPen(pg.mkPen(hex_color))
-
-    def generate_color(self, index, num_curves):
-        """
-        Génère une couleur unique en fonction de l'index et du nombre de courbes.
-        Exclut le rouge en évitant les teintes proches de 0 ou 1.
-        """
-        # Ajuster l'index pour éviter les teintes proches de 0 ou 1
-        hue = (index / num_curves) * 0.8 + 0.1  # Décalage pour éviter le rouge (autour de 0 ou 1)
-        hue = hue % 1.0  # Assurer que la teinte est dans [0, 1]
-        rgb = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
-        return pg.mkColor(int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255))
-
     def handle_zoom(self, _, range):
-        """ Ajuster l'affichage du zoom. """
+        """Adjust display based on the zoom range, dynamically changing x_min and x_max."""
         x_min, x_max = range
+
+        # Restrict x_min and x_max within the signal range
+        # self.x_min = max(self.x_min, x_min)
+        # self.x_max = min(self.x_max, x_max)
+
+        # Update x_min and x_max for all curves
         self.x_min = x_min
         self.x_max = x_max
+
+        # Trigger a full display refresh for all data curves
         for data_id, curve in self.curves.items():
             self.display_signal(data_id, curve)
 
@@ -542,3 +537,38 @@ class SignalPlotWidget(QWidget):
                 self.plot_widget.plotItem.layout.addItem(axis, 2, 3 + i)  # Réajouter chaque axe à droite dans le layout
 
             self.y_axis_grouped = False
+
+    def find_label_and_color_button_by_data_name(self, data_name):
+        """ Trouver l'élément de légende correspondant au nom de la donnée. """
+        for i in range(0, self.legend_layout.count(), 2):
+            label = self.legend_layout.itemAt(i).widget()
+            print(label.text())
+            if data_name in label.text():
+                # Trouver le bouton de couleur correspondant
+                color_button = self.legend_layout.itemAt(i + 1).widget()
+                return label, color_button
+
+    def change_curve_color(self, data_id, label, color_button=None, rgb_color=None):
+        """ Permet de changer la couleur de la courbe en cliquant sur l'élément de légende. """
+        color = None
+        if rgb_color:
+            color = QColor(rgb_color)
+        elif color_button:
+            color = QColorDialog.getColor()
+
+        if color.isValid():
+            hex_color = color.name()
+            label.setStyleSheet(f"font-weight: bold;")
+            color_button.setStyleSheet(f"background-color: {hex_color};")
+            self.curves[data_id].setPen(pg.mkPen(hex_color))
+
+    def generate_color(self, index, num_curves):
+        """
+        Génère une couleur unique en fonction de l'index et du nombre de courbes.
+        Exclut le rouge en évitant les teintes proches de 0 ou 1.
+        """
+        # Ajuster l'index pour éviter les teintes proches de 0 ou 1
+        hue = (index / num_curves) * 0.8 + 0.1  # Décalage pour éviter le rouge (autour de 0 ou 1)
+        hue = hue % 1.0  # Assurer que la teinte est dans [0, 1]
+        rgb = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+        return pg.mkColor(int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255))
