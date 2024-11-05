@@ -6,8 +6,7 @@ from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QVBoxLayout, QWidget, QLabel, QSlider, QPushButton, QHBoxLayout, QColorDialog
 import pyqtgraph as pg
 from pyqtgraph import mkColor, mkPen, PlotItem, PlotCurveItem
-# from pyqtgraph.examples.hdf5 import curve
-from scipy.stats import alpha
+
 import colorsys
 
 
@@ -92,7 +91,7 @@ class SignalPlotWidget(QWidget):
             else:
                 self.x_min = min(self.x_min, data_object.tmin)
                 self.x_max = max(self.x_max, data_object.tmin + data_object.dt * data_object.num_samples)
-            print(f'temp x_min: {self.x_min} - x_max: {self.x_max}')
+            # print(f'temp x_min: {self.x_min} - x_max: {self.x_max}')
         elif data_object.data_type == Data_Type.FREQ_SIGNAL:
             if self.x_min is None or self.x_max is None:
                 self.x_min = data_object.fmin
@@ -100,7 +99,7 @@ class SignalPlotWidget(QWidget):
             else:
                 self.x_min = min(self.x_min, data_object.fmin)
                 self.x_max = max(self.x_max, data_object.fmin + data_object.df * data_object.num_samples)
-                print(f'Freq x_min: {self.x_min} - x_max: {self.x_max}')
+                # print(f'Freq x_min: {self.x_min} - x_max: {self.x_max}')
         elif data_object.data_type == Data_Type.FFTS:
             if self.x_min is None or self.x_max is None:
                 # recuperer la premiere FFT des FFTS
@@ -112,7 +111,7 @@ class SignalPlotWidget(QWidget):
                 fft_data_object = data_object.fft_signals[0]
                 self.x_min = min(self.x_min, fft_data_object.fmin)
                 self.x_max = max(self.x_max, fft_data_object.fmin + fft_data_object.df * fft_data_object.num_samples)
-                print(f'FFT x_min: {self.x_min} - x_max: {self.x_max}')
+                # print(f'FFT x_min: {self.x_min} - x_max: {self.x_max}')
         elif data_object.data_type == Data_Type.FREQ_LIMIT:
             if self.x_min is None or self.x_max is None:
                 self.x_min = data_object.freq_min
@@ -120,14 +119,13 @@ class SignalPlotWidget(QWidget):
             else:
                 self.x_min = min(self.x_min, data_object.freq_min)
                 self.x_max = max(self.x_max, data_object.freq_max)
-            print(f'Freq limit x_min: {self.x_min} - x_max: {self.x_max}')
+            # print(f'Freq limit x_min: {self.x_min} - x_max: {self.x_max}')
         elif data_object.data_type == Data_Type.TEMP_LIMIT:
             if self.x_min is None or self.x_max is None:
                 # recupérer le xmin et xmax du plot
                 self.x_min = self.plot_widget.plotItem.vb.viewRange()[0][0]
                 self.x_max = self.plot_widget.plotItem.vb.viewRange()[0][1]
-            print(f'Temp limit x_min: {self.x_min} - x_max: {self.x_max}')
-
+            # print(f'Temp limit x_min: {self.x_min} - x_max: {self.x_max}')
 
         if len(self.curves) == 0:
             #cacher les axes Y
@@ -137,7 +135,6 @@ class SignalPlotWidget(QWidget):
         viewbox = pg.ViewBox()
         self.plot_widget.scene().addItem(viewbox)
         viewbox.setXLink(self.plot_widget.plotItem.vb)  # Lier l'axe X avec le ViewBox principal
-
 
         # Créer un nouvel axe Y à droite pour la courbe supplémentaire
         axis = pg.AxisItem('right')
@@ -179,23 +176,29 @@ class SignalPlotWidget(QWidget):
         self.add_legend_item(data_id, data_object.data_name, color=color)
 
         # redefinir une couleur qui change en fonction du nombre de courbes pour toutes les courbes
-        for i, dataid in enumerate(self.curves):
+        for i, dataid in enumerate(self.curves.keys()):
+            print(f"Data id: {dataid}")
 
             # recuperer le type de la data
             datacurve = self.data_pool.get_data_info(dataid)['data_object'].iloc[0]
-            datatype = datacurve.data_type
-            # si la data est une limite alors on change la couleur en rouge
-            if datatype in (Data_Type.TEMP_LIMIT, Data_Type.FREQ_LIMIT):
-                color = 'r'
+            data_type = datacurve.data_type
+            print(f"Data type: {data_type}")
+            #si la data est une limite, on met du rouge sinon on met couleur en fonction de l'index de la courbe
+            if data_type == Data_Type.FREQ_LIMIT or datacurve.data_type == Data_Type.TEMP_LIMIT:
+                print("Data is a limit")
+                color: QColor = QColor('red')
             else:
-                # couleur en fonction de l'index de la courbe
-                color = self.generate_color(i, len(self.curves))
+                color: QColor = self.generate_color(i, len(self.curves))
+            if color.isValid():
                 # recuperer le label de la courbe
                 print(f"Data name: {datacurve.data_name}")
-                label, colorbutton = self.find_label_and_color_button_by_data_name(datacurve.data_name)
-                print(f"Label: {label}")
+                color_button: QColorDialog = None
+                label: QLabel = None
+                label , color_button = self.find_label_and_color_button_by_data_name(datacurve.data_name)
+
+                print(f"Label: {label.text()}, Color button: {color_button}")
                 # changer la couleur de la courbe
-                self.change_curve_color(dataid, label, colorbutton, rgb_color=color)
+                self.change_curve_color(dataid, label, color_button, rgb_color=color)
 
     def display_signal(self, data_id, curve=None):
         """ Afficher les données pour un data_id spécifique """
@@ -223,7 +226,7 @@ class SignalPlotWidget(QWidget):
             x_data = np.linspace(self.x_min, self.x_max, self.max_points)
             level = [level for level, transparency_time, release_time in data_object.data][0]
             y_data = [level for t in x_data]  # Interpolate limit level at each frequency
-            print(f"x_data: {x_data} - y_data: {y_data}")
+            # print(f"x_data: {x_data} - y_data: {y_data}")
             if curve:
                 curve.setData(x_data, y_data, pen=pg.mkPen('r', style=pg.QtCore.Qt.DashLine))
             else:
@@ -241,10 +244,8 @@ class SignalPlotWidget(QWidget):
         print(
             f"Displaying data for {data_object.data_name}, type: {data_object.data_type},data_id: {data_id},data_object: {data_object}")
 
-
         num_samples = data_object.num_samples
         resolution = data_object.dt if data_object.data_type == Data_Type.TEMPORAL_SIGNAL else data_object.df
-
 
         # visible_range = self.x_max - self.x_min
         chunk_size = max(1, int(visible_range / resolution) // self.max_points)
@@ -532,9 +533,9 @@ class SignalPlotWidget(QWidget):
         color = None
         if rgb_color:
             color = QColor(rgb_color)
+            print(f"Changing color to {color.name()}")
         elif color_button:
             color = QColorDialog.getColor()
-
         if color.isValid():
             hex_color = color.name()
             label.setStyleSheet(f"font-weight: bold;")
@@ -550,4 +551,4 @@ class SignalPlotWidget(QWidget):
         hue = (index / num_curves) * 0.8 + 0.1  # Décalage pour éviter le rouge (autour de 0 ou 1)
         hue = hue % 1.0  # Assurer que la teinte est dans [0, 1]
         rgb = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
-        return pg.mkColor(int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255))
+        return QColor(int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255))
