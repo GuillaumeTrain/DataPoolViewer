@@ -65,8 +65,41 @@ class DataPoolViewerWidget(QWidget):
                 # Ajouter la donnée comme sous-élément de la source
                 source_item.appendRow(data_item)
 
-        # Ajouter la source à l'arborescence principale
-        self.model.appendRow(source_item)
+            # Ajouter la source à l'arborescence principale si son ID n'est pas déjà présent
+            if source_item is not None:
+                #contracter le treeview
+                self.tree_view.collapseAll()
+                if self.model.rowCount() == 0:
+                    self.model.appendRow(source_item)
+                else:
+                    sources = []
+                    #recuperer les la liste des sources dans le model
+
+                    for row in range(self.model.rowCount()):
+                        item = self.model.item(row)
+
+                    sources.append(item)
+                    # itterate over all sources and check if the source_id is in the text of any source
+                    for source in sources:
+                        if source is not None:
+                            if source_id not in source.text():
+                                print(f"source_id: {source_id} NOT in source.text(): {source.text()}")
+                                self.model.appendRow(source_item)
+                            else:
+                                print(f"source_id: {source_id} IS in source.text(): {source.text()}")
+                                # La source existe déjà, il faut la remplacer
+
+                                for row in range(self.model.rowCount()):
+                                    item :QStandardItem = self.model.item(row)
+                                    if item is not None:
+                                        if source_id in item.text():
+                                            print(f"removing item: {item.text()}")
+                                            #supprimer l'élément existant
+                                            self.model.removeRow(row)
+
+                                    #ajouter le nouvel élément
+                                    self.model.appendRow(source_item)
+
 
 
 class DataPoolNotifier(QObject):

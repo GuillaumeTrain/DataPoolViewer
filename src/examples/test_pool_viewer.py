@@ -1,7 +1,7 @@
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtWidgets import QApplication, QMainWindow, QDockWidget
 from PyDataCore import DataPool, Data_Type
-from src.dataviewer import DataPoolViewerWidget, DataPoolNotifier
+from src.DatapoolVisualizer.datapool_viewer import DataPoolViewerWidget, DataPoolNotifier
 import random
 
 
@@ -56,10 +56,12 @@ class MainWindow(QMainWindow):
 
         # Stocker des données réelles dans le DataPool
         signal_data = [0.1, 0.2, 0.3, 0.4, 0.5]  # Signal temporel exemple
-        self.pool.store_data(data_id_1, signal_data, source_id_1)
 
+        self.pool.store_data(data_id_1, signal_data, source_id_1)
+        self.pool.unlock_data(data_id_1)
         freq_data = [1.0, 1.1, 1.2, 1.3, 1.4]  # Signal fréquentiel exemple
         self.pool.store_data(data_id_2, freq_data, source_id_2)
+        self.pool.unlock_data(data_id_2)
 
     def start_async_modifications(self):
         # Démarrer une routine asynchrone pour modifier le DataPool à intervalles réguliers
@@ -77,7 +79,9 @@ class MainWindow(QMainWindow):
             source_id = random.choice(['source1', 'source2'])
             data_id = self.pool.register_data(Data_Type.TEMPORAL_SIGNAL, f"New Temp Signal {random.randint(1, 100)}", source_id, time_step=0.01, unit="V")
             signal_data = [random.uniform(0.0, 1.0) for _ in range(5)]
+
             self.pool.store_data(data_id, signal_data, source_id)
+            self.pool.unlock_data(data_id)
 
         elif action == 'update_signal':
             # Prendre un signal existant et modifier ses données
@@ -85,7 +89,9 @@ class MainWindow(QMainWindow):
                 data_row = self.pool.data_registry.sample(1).iloc[0]  # Sélectionner une donnée aléatoire
                 data_id = data_row['data_id']
                 new_data = [random.uniform(0.0, 1.0) for _ in range(5)]
+                self.pool.lock_data(data_id)
                 self.pool.store_data(data_id, new_data, random.choice(['source1', 'source2']))
+                self.pool.unlock_data(data_id)
 
         elif action == 'add_subscriber':
             # Ajouter un abonné à une donnée aléatoire
