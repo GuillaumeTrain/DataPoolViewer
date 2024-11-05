@@ -1,152 +1,132 @@
 
 # DataPoolViewer
 
-DataPoolViewer is a Python library for visually displaying and manipulating DataPool registers 
-(from the `PyDataCore` library) and plotting signals in real-time with a graphical interface based on PySide6 and PyQtGraph.
+**DataPoolViewer** is a Python visualization tool that integrates with **PyDataCore** to visualize temporal, frequency, and FFT data from a central data pool. It offers a GUI for exploring, grouping, and plotting data, allowing users to inspect multiple data sources, add limits, and manage subscribers.
 
-This library provides an intuitive interface to observe real-time changes in a DataPool. 
-In addition to visualizing the relationships between data sources and subscribers, 
-DataPoolViewer allows for the efficient plotting of large signals with optimized performance.
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Usage](#usage)
+  - [Example Code](#example-code)
+- [Class Descriptions](#class-descriptions)
+  - [DatapoolVisualizer](#datapoolvisualizer)
+  - [DataPoolViewerWidget](#datapoolviewerwidget)
+  - [PlotController](#plotcontroller)
+  - [SignalPlotWidget](#signalplotwidget)
+  - [DataPoolNotifier](#datapoolnotifier)
+- [Testing](#testing)
+- [Contributing](#contributing)
+- [License](#license)
+
+---
 
 ## Features
 
-- **Real-time visualization of DataPool registers**: Display of `data_registry`, `source_to_data`, and `subscriber_to_data` registers in a tree view.
-- **FFT Stream Animation**: Supports plotting FFT stream data, where frequency-domain signals are updated over time, creating an animated view.
-- **Multi-signal display with multiple Y-axes**: Supports plotting multiple signals (temporal, frequency, and FFT streams) with independent Y-axes on the same plot.
-- **Signal Simplification for Large Data**: Temporal (`TEMPORAL_SIGNAL`) and frequency (`FREQ_SIGNAL`) signals are simplified (min/max chunking) for performance when displaying large data.
-- **Dynamic Zoom and Pan**: Manages zooming in on plots with automatic updates of displayed data based on zoom level to enhance performance.
-- **Interactive Plot Control**: Includes controls for adding, grouping, ungrouping, and removing plots.
-- **Modular Plot Management**: Detachable (QDockWidget) plot windows allow users to rearrange the interface as needed.
-- **Automatic Register Refresh**: Tree view updates in real-time when changes occur in the DataPool, using signals.
-- **Monkey Patching for Real-time Data Sync**: The `DataPoolNotifier` class injects signals into DataPool methods without modifying PyDataCore.
-- **Interactive Player for FFT Streams**: Play, pause, and navigate through FFT stream data with a timeline and timestamped frequency data.
+- **Data Management**: Display, organize, and manage data sources, data types, and subscribers.
+- **Plotting**: Visualize temporal, frequency, and FFT data with customizable plots.
+- **Dynamic Limit Visualization**: Add and display both temporal and frequency limits.
+- **Interactivity**: Group and ungroup plots, synchronize axes, and change plot colors.
+- **Live FFT Animation**: Display animated frequency-domain data in real-time.
 
 ## Installation
 
-Clone the Git repository:
+1. Clone the repository:
+    ```bash
+    git clone https://github.com/yourusername/DataPoolViewer.git
+    cd DataPoolViewer
+    ```
 
-```bash
-git clone https://github.com/<your-username>/DataPoolViewer.git
-```
-
-Install the project dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-### Main Dependencies:
-
-- **PySide6**: For the graphical interface.
-- **PyDataCore**: Core library managing DataPool functionality.
-- **PyQtGraph**: For efficient signal plotting.
-
-Run the example to test the project:
-
-```bash
-python examples/test_pool_viewer.py
-```
+2. Install dependencies:
+    ```bash
+    pip install -r requirements.txt
+    ```
 
 ## Usage
 
-### Real-time DataPool Visualization
+To use **DataPoolViewer** in your application, follow the example below. It sets up a basic **QMainWindow** with a `DatapoolVisualizer` that displays and manages data from the **DataPool**.
 
-The `test_register.py` file demonstrates how to create a graphical interface for viewing DataPool registers. 
-Each change in the DataPool is automatically reflected in the interface.
-
-### Signal Plotting with Simplification
-
-The `test_plot_widget.py` file demonstrates generating and plotting large signals, such as a high-sampling-rate square wave. 
-The plot efficiently handles millions of points through min/max chunk simplification.
-
-### FFT Stream Animation
-
-To create an FFT stream animation, use the FFT data type (`FFTS`) with timestamped frequency-domain data. 
-The player controls allow users to navigate the stream over time.
-
-## Example Integration
-
-Here is a code snippet showing how to visualize a stored signal in a DataPool and plot it in a graphical interface:
+### Example Code
 
 ```python
-from PySide6.QtWidgets import QApplication, QMainWindow, QDockWidget
-from src.dataviewer.plot_widget import SignalPlotWidget
-import numpy as np
-from scipy import signal
+import sys
+from PySide6.QtWidgets import QApplication, QMainWindow
 from PyDataCore import DataPool, Data_Type
-from PySide6.QtCore import Qt
+from scipy import signal
+import numpy as np
+from src.DatapoolVisualizer.datapool_visualizer import DatapoolVisualizer
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        # Init the DataPool and register the square signal
         self.datapool = DataPool()
 
-        # Square wave signal parameters
-        sampling_interval = 0.0001
-        duration = 50  # Duration in seconds
-        frequency = 1  # Frequency in Hz
-        duty_cycle = 0.999  # Duty cycle
-
-        # Generate a square wave signal
-        t = np.arange(0, duration, sampling_interval)
-        # calculate the time step
+        t = np.linspace(0, 1, 500)
         tstep = t[1] - t[0]
-        square_signal = signal.square(2 * np.pi * frequency * t, duty=duty_cycle)
 
-        # déclarer le signal carré dans le DataPool
+        square_signal = signal.square(2 * np.pi * 5 * t)
         temporal_data_id = self.datapool.register_data(Data_Type.TEMPORAL_SIGNAL, "Square Signal 5Hz", "source1", False,
                                                        False, time_step=tstep, unit="V")
-        # stocker le signal carré dans le DataPool
         self.datapool.store_data(temporal_data_id, square_signal, "source1")
 
-        # Display the widget
-        dock_widget = QDockWidget("Square Signal", self)
-        signal_plot_widget = SignalPlotWidget(self.datapool, temporal_data_id)
-        dock_widget.setWidget(signal_plot_widget)
-        self.addDockWidget(Qt.RightDockWidgetArea, dock_widget)
+        self.visualizer = DatapoolVisualizer(self.datapool, parent=self)
+        self.setCentralWidget(self.visualizer)
 
 
 if __name__ == "__main__":
-    app = QApplication([])
+    app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
-    app.exec()
+    sys.exit(app.exec())
 ```
 
-## Project Structure
+## Class Descriptions
 
-```plaintext
-DataPoolViewer/
-│
-├── dataviewer/                    # Main package for data visualization and plotting
-│   ├── __init__.py
-│   ├── datapool_viewer.py         # Contains logic for QTreeView to visualize DataPool registers
-│   ├── datapoolvisualizer.py      # Handles main DataPool viewing and control logic
-│   ├── plot_widget.py             # Widget for plotting temporal, frequency, and FFT stream data
-│   └── plotcontroler.py           # Manages plot interactions and controls (e.g., grouping, removal)
-│
-├── examples/                      # Usage examples
-│   ├── test_pool_viewer.py        # Example demonstrating DataPool visualization with async updates
-│   └── test_register.py           # Basic example of DataPool register visualization
-│
-├── tests/                         # Unit tests for the library
-│   ├── test_plot_widget_ram_data.py  # Tests for RAM-based data plot
-│   ├── test_plot_widget_file_data.py # Tests for file-based data plot
-│   ├── test_plot_controler.py        # Tests for plot controller functionalities
-│   └── testdatapoolvisualizer.py     # Tests for DataPoolVisualizer and FFT stream integration
-│
-├── LICENSE                        # Open-source license
-├── README.md                      # Project documentation (this file)
-└── setup.py                       # Installation script for packaging
-```
+### DatapoolVisualizer
+Main widget for visualizing data from the `DataPool`. Integrates `DataPoolViewerWidget` and `PlotController`.
+
+#### Methods:
+- `__init__(self, data_pool, parent=None)`: Initializes the visualizer with the specified data pool.
+- `handle_data_selection(self, index)`: Handles data selection events and updates plots accordingly.
+
+### DataPoolViewerWidget
+Displays the `DataPool` structure in a tree view format.
+
+#### Methods:
+- `__init__(self, data_registry, source_to_data, subscriber_to_data, parent=None)`: Initializes the viewer widget.
+- `populate_tree_view(self, data_registry, source_to_data, subscriber_to_data)`: Populates the tree view.
+
+### PlotController
+Manages multiple `SignalPlotWidget` instances and provides controls for grouping, ungrouping, and managing plots.
+
+#### Methods:
+- `add_plot(self)`: Adds a new plot.
+- `remove_selected_plots(self)`: Removes selected plots.
+- `add_data_to_selected_plot(self, data_id)`: Adds data to the selected plot.
+
+### SignalPlotWidget
+Handles the display of individual plots.
+
+#### Methods:
+- `add_data(self, data_id, color='b')`: Adds data to the plot.
+- `display_signal(self, data_id, curve=None)`: Displays the data with simplified visualization.
+- `handle_zoom(self, _, range)`: Adjusts the display based on zoom.
+
+### DataPoolNotifier
+A utility class that triggers signals on `DataPool` updates.
+
+#### Methods:
+- `attach_to_pool(self, pool)`: Attaches to a `DataPool` instance.
+
+## Testing
+
+Test scripts are located in the `tests` folder and include checks for core functionality.
 
 ## Contributing
 
-Contributions are welcome! If you want to make improvements or add features, you can submit a pull request or create an issue.
+Contributions are welcome! Please fork the repository and submit a pull request.
 
 ## License
 
-This project is licensed under the MIT License. See the LICENSE file for more information.
-
+This project is licensed under the MIT License.
