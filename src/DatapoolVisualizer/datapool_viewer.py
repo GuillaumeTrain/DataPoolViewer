@@ -101,7 +101,6 @@ class DataPoolViewerWidget(QWidget):
                                     self.model.appendRow(source_item)
 
 
-
 class DataPoolNotifier(QObject):
     data_changed = Signal()
 
